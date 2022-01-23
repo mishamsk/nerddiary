@@ -1,0 +1,16 @@
+version: '3.7'
+services:
+    nerddiary:
+        build:
+            context: ./
+            args:
+                NERDDIARY_VERSION: ${NERDDIARY_VERSION}
+            dockerfile: Dockerfile
+        tty: true
+        container_name: nerddiary
+        command: nerddiary --log-file /app/log/nerddiary.log bot -tt ${NERDDIARY_BOT_TOKEN}
+        volumes:
+            - ./log:/app/log
+        environment:
+            - MIGREZYLER_BOT_TOKEN=${NERDDIARY_BOT_TOKEN}
+        restart: unless-stopped

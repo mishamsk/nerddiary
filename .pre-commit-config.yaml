@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.8.0
+    hooks:
+      - id: isort
+        args: ["--filter-files"]
+  - repo: https://github.com/ambv/black
+    rev: 21.12b0
+    hooks:
+      - id: black
+        # Temporary exclude handlers as they are using non suppoerted match statements
+        exclude: nerddiary/bots/tgbot/handlers.py
+        language_version: python3.10
+  - repo: https://github.com/pycqa/flake8
+    rev: 4.0.1
+    hooks:
+      - id: flake8
+        # Temporary exclude handlers as they are using non suppoerted match statements
+        exclude: nerddiary/bots/tgbot/handlers.py|nerddiary/bots/tgbot/model.py
+        # additional_dependencies: [flake8-typing-imports==1.10.0]
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: .venv/bin/pytest
+        language: script
+        pass_filenames: false
+        always_run: true
