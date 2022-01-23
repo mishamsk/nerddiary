@@ -1,1 +1,3 @@
-# nerddiary
+# THe Nerd Diary
+
+WIP
