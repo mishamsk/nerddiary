@@ -18,11 +18,3 @@ repos:
         # Temporary exclude handlers as they are using non suppoerted match statements
         exclude: nerddiary/bots/tgbot/handlers.py|nerddiary/bots/tgbot/model.py
         # additional_dependencies: [flake8-typing-imports==1.10.0]
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: .venv/bin/pytest
-        language: script
-        pass_filenames: false
-        always_run: true
