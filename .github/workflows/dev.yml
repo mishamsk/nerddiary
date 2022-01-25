@@ -31,7 +31,7 @@ jobs:
           poetry install
       - name: Isort
         run: |
-          isort --filter-files
+          isort --filter-files .
       - name: Test with pytest
         run: |
           pytest

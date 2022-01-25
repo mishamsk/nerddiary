@@ -1,10 +1,10 @@
 from datetime import timedelta
 
-import pytest
-from pydantic import ValidationError
-
 from nerddiary.core.poll.question import Question
 from nerddiary.core.poll.type import DependantSelectType, TimestampType
+
+import pytest
+from pydantic import ValidationError
 
 
 class TestQuestion:

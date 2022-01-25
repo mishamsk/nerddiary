@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Tuple, Type
 
 import sqlalchemy as sa
 from pydantic import BaseModel, DirectoryPath, PrivateAttr
@@ -10,6 +9,8 @@ from sqlalchemy.dialects.sqlite import BLOB
 from sqlalchemy.sql.expression import Select
 
 from .crypto import EncryptionProdiver
+
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Tuple, Type
 
 if TYPE_CHECKING:
     pass

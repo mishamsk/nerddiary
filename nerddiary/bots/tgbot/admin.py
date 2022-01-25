@@ -7,12 +7,6 @@ import os
 import sys
 from functools import wraps
 from threading import Thread
-from typing import List, Optional
-
-from telegram import Update
-from telegram.error import Unauthorized
-from telegram.ext import CallbackContext, CallbackQueryHandler, Dispatcher, DispatcherHandlerStop, TypeHandler, Updater
-from telegram.replymarkup import ReplyMarkup
 
 import nerddiary.bot.handlers as bot_handlers
 import nerddiary.bot.strings as BotStrings
@@ -20,6 +14,13 @@ from nerddiary.bot.config import BotConfig
 from nerddiary.bot.constants import ContextKey, HandlerGroup, KeyboardAdminModerate
 from nerddiary.bot.helpers import add_commands_and_handlers, generate_buttons
 from nerddiary.bot.model import User
+
+from telegram import Update
+from telegram.error import Unauthorized
+from telegram.ext import CallbackContext, CallbackQueryHandler, Dispatcher, DispatcherHandlerStop, TypeHandler, Updater
+from telegram.replymarkup import ReplyMarkup
+
+from typing import List, Optional
 
 logger = logging.getLogger("nerddiary.bot.admin")
 

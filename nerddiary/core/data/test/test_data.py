@@ -3,12 +3,12 @@ import json
 import random
 import time
 
+from nerddiary.core.data.data import DataConnection, DataProvider, SQLLiteConnection, SQLLiteProvider
+
 import pytest
 import sqlalchemy as sa
 from pydantic import ValidationError
 from sqlalchemy.dialects.sqlite import BLOB
-
-from nerddiary.core.data.data import DataConnection, DataProvider, SQLLiteConnection, SQLLiteProvider
 
 
 class TestDataProvider:

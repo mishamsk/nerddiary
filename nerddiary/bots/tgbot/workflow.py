@@ -3,9 +3,10 @@ import datetime
 import logging
 from copy import deepcopy
 from io import StringIO
-from typing import Dict, List, Tuple, cast
 
 from nerddiary.bot.model import Poll, Question, User, ValueLabel
+
+from typing import Dict, List, Tuple, cast
 
 logger = logging.getLogger("nerddiary.bot.workflow")
 

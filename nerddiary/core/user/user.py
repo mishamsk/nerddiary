@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from glob import glob
-from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import Field
@@ -13,6 +12,8 @@ from pydantic.fields import Field
 from ..poll.poll import Poll
 from ..poll.primitives import TimeZone
 from ..report.report import Report
+
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("nerddiary.bot.model")
 

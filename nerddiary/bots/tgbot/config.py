@@ -3,13 +3,14 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-from typing import Any, ClassVar, Dict, List, Optional
+
+from nerddiary.bot.data import DataProvider
+from nerddiary.bot.model import QuestionType, TimeZone, User
 
 from pydantic import BaseSettings, DirectoryPath, PrivateAttr, ValidationError, validator
 from pydantic.fields import Field
 
-from nerddiary.bot.data import DataProvider
-from nerddiary.bot.model import QuestionType, TimeZone, User
+from typing import Any, ClassVar, Dict, List, Optional
 
 logger = logging.getLogger("nerddiary.bot.config")
 

@@ -4,12 +4,6 @@ import datetime
 import logging
 import uuid
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Dict
-
-from telegram import Bot, CallbackQuery, ChatAction, ParseMode, ReplyKeyboardRemove, Update
-from telegram.error import BadRequest, Unauthorized
-from telegram.ext import CallbackContext, ConversationHandler, Dispatcher, Job  # noqa: F401
-from telegram.ext.jobqueue import JobQueue
 
 import nerddiary.bots.tgbot.job as botjob
 import nerddiary.bots.tgbot.strings as BotStrings
@@ -28,6 +22,13 @@ from nerddiary.bots.tgbot.helpers import add_commands_and_handlers, generate_but
 from nerddiary.bots.tgbot.workflow import BotWorkflow
 from nerddiary.core.data.data import DataConnection
 from nerddiary.core.user.user import User
+
+from telegram import Bot, CallbackQuery, ChatAction, ParseMode, ReplyKeyboardRemove, Update
+from telegram.error import BadRequest, Unauthorized
+from telegram.ext import CallbackContext, ConversationHandler, Dispatcher, Job  # noqa: F401
+from telegram.ext.jobqueue import JobQueue
+
+from typing import TYPE_CHECKING, Callable, Dict
 
 if TYPE_CHECKING:
     from nerddiary.bots.tgbot.admin import BotAdmin

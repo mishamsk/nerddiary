@@ -3,11 +3,11 @@ import logging
 import os
 import sys
 
-import click
-
 from nerddiary import __version__
 from nerddiary.bots.tgbot.bot import main as bot_entry
 from nerddiary.log import configure_logger
+
+import click
 
 
 def version_msg() -> str:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict
 
 from pydantic import BaseModel, Field, PrivateAttr
 from telegram.ext import JobQueue
@@ -10,6 +9,8 @@ from telegram.ext import JobQueue
 from .data import DataConnection
 from .model import Poll, User
 from .workflow import BotWorkflow
+
+from typing import Dict
 
 
 class ChatContext(BaseModel):

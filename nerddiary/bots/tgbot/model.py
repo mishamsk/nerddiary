@@ -9,12 +9,13 @@ import logging
 import re
 from copy import deepcopy
 from glob import glob
-from typing import Any, ClassVar, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ValidationError, constr, root_validator, validator
 from pydantic.fields import Field, ModelField, PrivateAttr
 
 from .primitives import TimeZone, ValueLabel
+
+from typing import Any, ClassVar, Dict, List, Optional, Union
 
 logger = logging.getLogger("nerddiary.bot.model")
 

@@ -6,12 +6,13 @@ import abc
 import datetime
 import logging
 import re
-import typing as t
 
 from pydantic import BaseModel, conlist, validator
 from pydantic.fields import Field, PrivateAttr
 
 from .primitives import ValueLabel
+
+import typing as t
 
 if t.TYPE_CHECKING:
     from nerddiary.user.user import User

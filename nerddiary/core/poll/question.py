@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, validator
 from pydantic.fields import Field, PrivateAttr
 
 from .type import DependantSelectType, QuestionType, SelectType
+
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

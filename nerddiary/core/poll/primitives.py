@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict
 
 import pytz
 from pydantic import BaseModel, root_validator, validator
+
+from typing import Any, Dict
 
 
 class TimeZone(datetime.tzinfo):

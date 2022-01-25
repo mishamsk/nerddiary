@@ -1,14 +1,14 @@
 import logging
 
-from telegram import Update
-from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, TypeHandler, Updater  # noqa: F401
-from telegram.ext.dispatcher import Dispatcher
-
 import nerddiary.bot.handlers as bot_handlers
 from nerddiary.bot.admin import BotAdmin
 from nerddiary.bot.config import BotConfig
 from nerddiary.bot.constants import ContextKey, HandlerGroup, PollState
 from nerddiary.bot.model import User
+
+from telegram import Update
+from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, TypeHandler, Updater  # noqa: F401
+from telegram.ext.dispatcher import Dispatcher
 
 logger = logging.getLogger("nerddiary.bot")
 

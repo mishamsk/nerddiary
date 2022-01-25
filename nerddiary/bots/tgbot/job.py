@@ -1,10 +1,11 @@
 import datetime
 import logging
-from typing import Any, Callable
+
+from nerddiary.bot.context import ChatJobContext, JobContext
 
 from telegram.ext import Job, JobQueue
 
-from nerddiary.bot.context import ChatJobContext, JobContext
+from typing import Any, Callable
 
 logger = logging.getLogger("nerddiary.bot.job")
 

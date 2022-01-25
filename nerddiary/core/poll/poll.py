@@ -6,12 +6,13 @@ import datetime
 import itertools
 import logging
 import re
-from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, conlist, constr, validator
 from pydantic.fields import Field, PrivateAttr
 
 from .question import Question
+
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

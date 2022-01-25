@@ -4,7 +4,9 @@ from __future__ import annotations
 import enum
 import html
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
+
+import nerddiary.bot.strings as BotStrings
+from nerddiary.bot.constants import MAX_INLINE_KEYBOARD_ROW_BUTTONS, HandlerGroup
 
 from telegram import (
     Bot,
@@ -16,8 +18,7 @@ from telegram import (
 )
 from telegram.ext import CommandHandler, Dispatcher
 
-import nerddiary.bot.strings as BotStrings
-from nerddiary.bot.constants import MAX_INLINE_KEYBOARD_ROW_BUTTONS, HandlerGroup
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from nerddiary.bot.model import Question, ValueLabel
