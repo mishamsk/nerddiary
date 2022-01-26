@@ -7,7 +7,7 @@ import itertools
 import logging
 import re
 
-from pydantic import BaseModel, conlist, constr, validator
+from pydantic import BaseModel, validator
 from pydantic.fields import Field, PrivateAttr
 
 from .question import Question
@@ -20,18 +20,18 @@ logger = logging.getLogger(__name__)
 class Poll(BaseModel):
     """Represents a single poll"""
 
-    poll_name: constr(strip_whitespace=True, max_length=30) = Field(description="User facing name")  # type: ignore # noqa: F722
+    poll_name: str = Field(max_length=30, description="User facing name")  # type: ignore # noqa: F722
     """ User facing name """
 
-    command: constr(strip_whitespace=True, max_length=32, regex=r"^[\da-z_]{1,32}$") = Field(default=None, description="Command for user call (api or in a bot). If none is given poll_name may be used if it fits the format after replacing whitespace with _")  # type: ignore # noqa: F722
+    command: str = Field(default=None, max_length=32, regex=r"^[\da-z_]{1,32}$", description="Command for user call (api or in a bot). If none is given poll_name may be used if it fits the format after replacing whitespace with _")  # type: ignore # noqa: F722
 
     description: str | None = Field(description="Poll long description", max_length=100)
 
     reminder_time: Optional[datetime.time] = Field(description="Poll auto-reminder time in user local time zone")
     """ Poll auto-reminder time in user local time zone """
 
-    questions: conlist(Question, min_items=1) = Field(  # type:ignore
-        description="List of polls questions"
+    questions: List[Question] = Field(  # type:ignore
+        description="List of polls questions", min_items=1
     )
     """ Dictionary of polls questions """
 
@@ -44,15 +44,25 @@ class Poll(BaseModel):
 
     hours_over_midgnight: Optional[int] = Field(
         default=3,
+        ge=0,
+        le=7,
         description="For once per day polls - if poll is started before `hours_over_midgnight`AM set it to previous day 11:59:59PM",
     )
     """ For once per day polls - if poll is started before `hours_over_midgnight`AM set it to previous day 11:59:59PM """
 
+    class Config:
+        json_encoders = {Question: lambda q: q.json(exclude_none=True, models_as_dict=False)}
+
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
 
-        if not self.command and re.match(r"^[\da-z_]{1,32}$", re.sub(r"\s+", "_", self.poll_name)):
-            self.command = re.sub(r"\s+", "_", self.poll_name)
+        # Strip whitespace
+        if self.command:
+            self.command.strip()
+
+        # Try auto assign command from name
+        if not self.command and re.match(r"^[\da-z_]{1,32}$", re.sub(r"\s+", "_", self.poll_name.lower())):
+            self.command = re.sub(r"\s+", "_", self.poll_name.lower())
 
         # Create help mappings for workflow processing
         self._questions_dict = {}
@@ -96,7 +106,8 @@ class Poll(BaseModel):
 
     @validator("hours_over_midgnight")
     def check_once_per_day(cls, v, values: Dict[str, Any]):
-        if not values["once_per_day"] and v:
+        opd = values.get("once_per_day")
+        if opd is not None and not opd and v:
             raise ValueError("`hours_over_midgnight` can only be set for `once_per_day` polls")
 
         return v

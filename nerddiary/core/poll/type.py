@@ -15,7 +15,7 @@ from .primitives import ValueLabel
 import typing as t
 
 if t.TYPE_CHECKING:
-    from nerddiary.user.user import User
+    from nerddiary.core.user.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class QuestionType(BaseModel, abc.ABC):
 
 class SelectType(QuestionType):
 
-    select: conlist(ValueLabel, min_items=1)  # type:ignore
+    select: t.List[ValueLabel] = Field(description="List of answer options", min_items=1)  # type:ignore
 
     def __init__(self, **data):
         super().__init__(**data)

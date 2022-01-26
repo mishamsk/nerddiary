@@ -52,3 +52,11 @@
                 1. *None so far*
         3. Handler sub-handler-call
 
+# Handlers
+
+## Routers
+
+/[COMMAND|JOB|MESSAGE]
+    COMMAND
+    JOB
+    MESSAGE/[POLL|REPORT|SETTINGS]/[OBJECT.ID]/[SKIP|ANSWER]/[id]
