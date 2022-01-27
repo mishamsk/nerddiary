@@ -30,7 +30,7 @@ class TestQuestion:
 
         q = Question.parse_raw(json)
 
-        assert isinstance(q.type, DependantSelectType)
+        assert isinstance(q._type, DependantSelectType)
         assert q.code == "q"
         assert q.name == "q"
         assert q.description == "some description"
@@ -39,14 +39,14 @@ class TestQuestion:
         assert q.delay_time is None
         assert q.delay_on is None
         assert q._order == -1
-        assert "NoNo" in q.type.get_possible_values()
-        assert "NoYes" in q.type.get_possible_values()
-        assert "YesNo" in q.type.get_possible_values()
-        assert "YesYes" in q.type.get_possible_values()
+        assert "NoNo" in q._type.get_possible_values()
+        assert "NoYes" in q._type.get_possible_values()
+        assert "YesNo" in q._type.get_possible_values()
+        assert "YesYes" in q._type.get_possible_values()
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, models_as_dict=False)
-        assert Question.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        assert Question.parse_raw(nj) == q
 
         json = """
         {
@@ -58,7 +58,7 @@ class TestQuestion:
 
         q = Question.parse_raw(json)
 
-        assert isinstance(q.type, TimestampType)
+        assert isinstance(q._type, TimestampType)
         assert q.code == "q"
         assert q.name == "not code"
         assert q.description is None
@@ -69,8 +69,8 @@ class TestQuestion:
         assert q._order == -1
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, models_as_dict=False)
-        assert Question.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        assert Question.parse_raw(nj) == q
 
         json = """
         {
@@ -97,15 +97,15 @@ class TestQuestion:
 
         q = Question.parse_raw(json)
 
-        assert isinstance(q.type, DependantSelectType)
+        assert isinstance(q._type, DependantSelectType)
         assert q.ephemeral is True
         assert q.depends_on == "other q"
         assert q.delay_time == timedelta(minutes=10, seconds=15)
         assert q.delay_on == ["NoNo"]
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, models_as_dict=False)
-        assert Question.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        assert Question.parse_raw(nj) == q
 
     def test_validations(self):
         # missing code

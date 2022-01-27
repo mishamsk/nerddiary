@@ -62,8 +62,8 @@ class TestPoll:
         assert p.questions[1]._order == 1
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, models_as_dict=False)
-        assert Poll.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        assert Poll.parse_raw(nj) == p
 
         json = """
         {
@@ -114,12 +114,12 @@ class TestPoll:
         assert p.once_per_day is True
         assert p.hours_over_midgnight == 3
         assert len(p.questions) == 3
-        assert p._questions_dict["q3"] == p.questions[3]
+        assert p._questions_dict["q3"] == p.questions[2]
         assert p.questions[2]._order == 2
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, models_as_dict=False)
-        assert Poll.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        assert Poll.parse_raw(nj) == p
 
         json = """
         {
@@ -142,11 +142,11 @@ class TestPoll:
         assert p.command is None
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, models_as_dict=False)
-        assert Poll.parse_raw(nj).json(exclude_unset=True, models_as_dict=False) == nj
+        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        assert Poll.parse_raw(nj) == p
 
     def test_validations(self):
-        # too long name, description. wrong command format. incorrect types for other fiels. Incorrect dependency
+        # too long name, description. wrong command format. incorrect types for other fiels. Incorrect dependency (depends on undependable type)
         json = """
         {
             "poll_name":"too long of a name. more than 30 characters.",
@@ -205,7 +205,6 @@ class TestPoll:
             "reminder_time",
             "once_per_day",
             "hours_over_midgnight",
-            ("questions", 0),
             ("questions", 2),
         }
         for v_err in err.value.errors():
@@ -228,13 +227,6 @@ class TestPoll:
                 case ("hours_over_midgnight",) as mtch:
                     assert v_err["type"] == "value_error.number.not_ge"
                     must_error.remove(mtch[0])
-                case ("questions", 0) as mtch:
-                    assert (
-                        v_err["type"] == "value_error"
-                        and v_err["msg"]
-                        == "Question <Can't depend on future question> depends on <q1> which is either not defined, or goes after this question"
-                    )
-                    must_error.remove(mtch)
                 case ("questions", 2) as mtch:
                     assert (
                         v_err["type"] == "value_error"
@@ -242,6 +234,137 @@ class TestPoll:
                         == "Question <Can't depend on q1> depends on <q1> but is not of a type that can be dependant"
                     )
                     must_error.remove(mtch)
+                case _ as mtch:
+                    assert False, f"Unexpected error caught: {str(mtch)}"
+
+        # all errors caught
+        assert len(must_error) == 0
+
+        # missing poll_name, too long command, hours_over_midgnight with once_per_day = False. Incorrect dependency (depends on later question)
+        json = """
+        {
+            "command": "too long of a command. more than 30 characters.",
+            "once_per_day": false,
+            "hours_over_midgnight": 3,
+            "questions": [
+                {
+                    "code": "q2",
+                    "name": "Can't depend on future question",
+                    "depends_on": "q1",
+                    "type": {
+                        "select": {
+                            "No": [
+                                {"NoNo": "😀 No"},
+                                {"NoYes": "😭 Yes"}
+                            ],
+                            "Yes": [
+                                {"YesNo": "😀 No"},
+                                {"YesYes": "😭 Yes"}
+                            ]
+                        }
+                    }
+                },
+                {
+                    "code": "q1",
+                    "type": {
+                        "select": [
+                            {"No": "😀 No"},
+                            {"Yes": "😭 Yes"}
+                        ]
+                    }
+                }
+            ]
+        }
+        """
+
+        with pytest.raises(ValidationError) as err:
+            Poll.parse_raw(json)
+        assert err.type == ValidationError
+
+        must_error = {
+            "poll_name",
+            "command",
+            "hours_over_midgnight",
+            "questions",
+        }
+        for v_err in err.value.errors():
+            match v_err["loc"]:
+                case ("poll_name",) as mtch:
+                    assert v_err["type"] == "value_error.missing"
+                    must_error.remove(mtch[0])
+                case ("command",) as mtch:
+                    assert v_err["type"] == "value_error.any_str.max_length"
+                    must_error.remove(mtch[0])
+                case ("hours_over_midgnight",) as mtch:
+                    assert (
+                        v_err["type"] == "value_error"
+                        and v_err["msg"] == "`hours_over_midgnight` can only be set for `once_per_day` polls"
+                    )
+                    must_error.remove(mtch[0])
+                case ("questions",) as mtch:
+                    assert (
+                        v_err["type"] == "value_error"
+                        and v_err["msg"]
+                        == "Question <Can't depend on future question> depends on <q1> which is either not defined, or goes after this question"
+                    )
+                    must_error.remove(mtch[0])
+                case _ as mtch:
+                    assert False, f"Unexpected error caught: {str(mtch)}"
+
+        # all errors caught
+        assert len(must_error) == 0
+
+        # Incorrect dependency (dependency values do not match dependant options)
+        json = """
+        {
+            "poll_name": "tok",
+            "questions": [
+                {
+                    "code": "q1",
+                    "type": {
+                        "select": [
+                            {"No": "😀 No"},
+                            {"Yes": "😭 Yes"}
+                        ]
+                    }
+                },
+                {
+                    "code": "q2",
+                    "depends_on": "q1",
+                    "name": "Can't depend on No/Yes select question",
+                    "type": {
+                        "select": {
+                            "No1": [
+                                {"NoNo": "😀 No"},
+                                {"NoYes": "😭 Yes"}
+                            ],
+                            "Yes": [
+                                {"YesNo": "😀 No"},
+                                {"YesYes": "😭 Yes"}
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+        """
+
+        with pytest.raises(ValidationError) as err:
+            Poll.parse_raw(json)
+        assert err.type == ValidationError
+
+        must_error = {
+            "questions",
+        }
+        for v_err in err.value.errors():
+            match v_err["loc"]:
+                case ("questions",) as mtch:
+                    assert (
+                        v_err["type"] == "value_error"
+                        and v_err["msg"]
+                        == "Question <Can't depend on No/Yes select question> is of type that is not compatible with the dependcy question <q1>"
+                    )
+                    must_error.remove(mtch[0])
                 case _ as mtch:
                     assert False, f"Unexpected error caught: {str(mtch)}"
 

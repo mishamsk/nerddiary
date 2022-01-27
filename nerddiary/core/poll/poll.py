@@ -30,9 +30,7 @@ class Poll(BaseModel):
     reminder_time: Optional[datetime.time] = Field(description="Poll auto-reminder time in user local time zone")
     """ Poll auto-reminder time in user local time zone """
 
-    questions: List[Question] = Field(  # type:ignore
-        description="List of polls questions", min_items=1
-    )
+    questions: List[Question] = Field(description="List of polls questions", min_items=1)
     """ Dictionary of polls questions """
 
     _questions_dict: Dict[str, Question] = PrivateAttr(default={})
@@ -49,9 +47,6 @@ class Poll(BaseModel):
         description="For once per day polls - if poll is started before `hours_over_midgnight`AM set it to previous day 11:59:59PM",
     )
     """ For once per day polls - if poll is started before `hours_over_midgnight`AM set it to previous day 11:59:59PM """
-
-    class Config:
-        json_encoders = {Question: lambda q: q.json(exclude_none=True, models_as_dict=False)}
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -70,16 +65,6 @@ class Poll(BaseModel):
             q._order = order
             self._questions_dict |= {q.code: q}
 
-    @validator("questions", each_item=True)
-    def dependant_question_type_must_support_it(cls, v: Question):
-        # Check that dependant question exists and has already been processed (comes earlier)
-        if v.depends_on and not v.type.is_dependent:  # type:ignore
-            raise ValueError(
-                f"Question <{v.name}> depends on <{v.depends_on}> but is not of a type that can be dependant"
-            )
-
-        return v
-
     @validator("questions")
     def dependant_question_must_exist_and_support_type(cls, v: List[Question]):
         # Check that dependant question exists and has already been processed (comes earlier)
@@ -92,15 +77,25 @@ class Poll(BaseModel):
             if question.depends_on:
                 if question.depends_on not in previous:
                     raise ValueError(
-                        f"Question <{name}> depends on <{question.depends_on}> which is either not defined, or goes after this question"
+                        f"Question <{question.name}> depends on <{question.depends_on}> which is either not defined, or goes after this question"
                     )
 
-                if not question.type.check_dependency_type(q_dict[question.depends_on].type):  # type: ignore
+                if not question._type.check_dependency_type(q_dict[question.depends_on]._type):  # type: ignore
                     raise ValueError(
-                        f"Question <{name}> is of type that can't depend on question <{question.depends_on}>"
+                        f"Question <{question.name}> is of type that is not compatible with the dependcy question <{question.depends_on}>"
                     )
 
             previous.append(name)
+
+        return v
+
+    @validator("questions", each_item=True)
+    def dependant_question_type_must_support_it(cls, v: Question):
+        # Check that dependant question exists and has already been processed (comes earlier)
+        if v.depends_on and not v._type.is_dependent:  # type:ignore
+            raise ValueError(
+                f"Question <{v.name}> depends on <{v.depends_on}> but is not of a type that can be dependant"
+            )
 
         return v
 

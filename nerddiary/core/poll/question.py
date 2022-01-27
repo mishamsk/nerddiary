@@ -15,11 +15,6 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-def _custom_serialize_type(type: QuestionType):
-    """Serialize named types back into name string"""
-    return type.type
-
-
 class Question(BaseModel):
     """Represents a single question within a poll"""
 
@@ -61,16 +56,16 @@ class Question(BaseModel):
     """ Answer that will trigger a reminder and pause poll """
 
     _order: int = PrivateAttr(default=-1)
-
-    class Config:
-        json_encoders = {type: _custom_serialize_type for type in QuestionType.supported_types.values()}
+    _type: QuestionType = PrivateAttr(default=-1)
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
 
         # Replace type name with actual type object
         if isinstance(self.type, str):
-            self.type = QuestionType.supported_types[self.type]()
+            self._type = QuestionType.supported_types[self.type]()
+        else:
+            self._type = self.type
 
         if self.name is None:
             self.name = self.code
