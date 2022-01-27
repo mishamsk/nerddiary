@@ -35,10 +35,10 @@ class TestDataConnection:
 
 
 class TestSQLLiteProvider:
-    def test_provider(self, tmp_path):
+    def test_provider(self, tmp_path_factory):
         assert SQLLiteProvider.name == "sqllite"
 
-        mockuser_id = 123
+        mockuser_id = "123"
 
         # Incorrect params
         with pytest.raises(ValidationError) as err:
@@ -46,36 +46,60 @@ class TestSQLLiteProvider:
         assert err.type == ValidationError
 
         # Correct params
-        data_path = tmp_path / "data"
-        data_path.mkdir()
+        data_path = tmp_path_factory.mktemp("data")
         provider = DataProvider.get_data_provider("sqllite", {"base_path": str(data_path)})
 
         assert isinstance(provider, SQLLiteProvider)
         assert provider.check_data_exist(user_id=mockuser_id) is False
+        assert provider.check_config_exist(user_id=mockuser_id) is False
 
-        user_path = data_path / ("u" + str(mockuser_id)) / "data.db"
-        user_path.mkdir(parents=True, exist_ok=True)
-        user_path.touch()
+        user_data_path = data_path / mockuser_id / "data.db"
+        user_data_path.mkdir(parents=True, exist_ok=True)
+        user_data_path.touch()
         assert provider.check_data_exist(user_id=mockuser_id) is True
 
-    def test_get_connection(self, mockuser, test_data_provider, test_encryption_provider):
+        user_conf_path = data_path / mockuser_id / "config"
+        user_conf_path.mkdir(parents=True, exist_ok=True)
+        user_conf_path.touch()
+        assert provider.check_config_exist(user_id=mockuser_id) is True
+
+    def test_get_connection(self, test_data_provider, test_encryption_provider):
+        mockuser_id = "123"
+
         # Encrypted
-        conn = test_data_provider.get_connection(mockuser, test_encryption_provider)
+        conn = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
 
         assert isinstance(conn, SQLLiteConnection)
         assert conn.encrypted is True
 
         # Not Encrypted
-        conn = test_data_provider.get_connection(mockuser)
+        conn = test_data_provider.get_connection(mockuser_id)
 
         assert isinstance(conn, SQLLiteConnection)
         assert conn.encrypted is False
 
 
 class TestSQLLiteConnection:
-    def test_connection(self, mockuser, test_data_provider, test_encryption_provider):
+    def test_config(self, mockuser, test_data_provider, test_encryption_provider):
+        mockuser_id = "123"
 
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser.id, test_encryption_provider)
+        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
+
+        config = mockuser.json(exclude_unset=True, ensure_ascii=False)
+
+        assert conn.store_config(config)
+        config_path = test_data_provider._params.base_path.joinpath(mockuser_id, "config")
+
+        # Validate data was encrypted
+        assert config_path.read_bytes().decode() != config
+
+        # Check correct loading of the config back
+        assert conn.load_config() == config
+
+    def test_connection(self, test_data_provider, test_encryption_provider):
+        mockuser_id = "123"
+
+        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
 
         poll_code_1 = "poll1"
         poll_code_2 = "poll2"
@@ -84,17 +108,19 @@ class TestSQLLiteConnection:
         poll_1_values = []
         for i in range(1, 10):
             poll_1_values.append(row_data_base + str(i))
-            conn.append_log(poll_code_1, row_data_base + str(i))
+            id = conn.append_log(poll_code_1, row_data_base + str(i))
+            assert id == i
 
         poll_2_values = []
         for i in range(10, 20):
             poll_2_values.append(row_data_base + str(i))
-            conn.append_log(poll_code_2, row_data_base + str(i))
+            id = conn.append_log(poll_code_2, row_data_base + str(i))
+            assert id == i
 
         # Test data is encrypted at rest
         engine = sa.create_engine(
             test_data_provider._params._base_uri
-            + str(test_data_provider._params.base_path.joinpath("u" + str(mockuser.id), "data.db"))
+            + str(test_data_provider._params.base_path.joinpath(mockuser_id, "data.db"))
         )
 
         meta = sa.MetaData()
@@ -109,6 +135,7 @@ class TestSQLLiteConnection:
             sa.Column("updated_ts", sa.DATETIME, nullable=False),
         )
 
+        # Check data is indeed encrypted
         with engine.connect() as econn:
             stmt = data_table.select().where(data_table.c.poll_code == poll_code_1)
             result = econn.execute(stmt)

@@ -4,30 +4,39 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import tzinfo
 from glob import glob
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 from pydantic.fields import Field
 
 from ..poll.poll import Poll
 from ..poll.primitives import TimeZone
 from ..report.report import Report
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("nerddiary.bot.model")
 
 
 class User(BaseModel):
-    id: int = Field(description="This user id")
+    id: str = Field(description="This user id")
     username: str | None = Field(default=None, description="Optional user name")
-    config_file_path: str = Field(description="Path to config file")
-    encrypt_data: bool = Field(True, description="Whether poll data should be stored encrypted")
+    encrypt_data: bool = Field(True, description="Whether poll & config data should be stored encrypted")
+    password: SecretStr = Field(default=None, exclude=True, description="User password for encryption")
+    lang_code: str = Field(
+        default="en", min_length=2, max_length=2, description="User preferred language (2 letter code)"
+    )
     timezone: Optional[TimeZone]
     polls: Optional[List[Poll]]
     reports: Optional[List[Report]]
 
-    def __init__(self, **data: Any) -> None:
+    class Config:
+        title = "User Configuration"
+        extra = "forbid"
+        json_encoders = {tzinfo: lambda t: str(t)}
+
+    def __init__(self, **data) -> None:
         super().__init__(**data)
 
         # convert_reminder_times_to_local_if_set
@@ -89,10 +98,6 @@ class User(BaseModel):
             )
 
         return ret
-
-    class Config:
-        title = "User Configuration"
-        extra = "forbid"
 
 
 if __name__ == "__main__":

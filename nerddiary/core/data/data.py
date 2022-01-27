@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import sqlalchemy as sa
 from pydantic import BaseModel, DirectoryPath, PrivateAttr
@@ -37,11 +38,15 @@ class DataProvider(ABC):
         return all_subclasses(cls)
 
     @abstractmethod
-    def get_connection(self, user_id: int, encryption_provider: EncryptionProdiver = None) -> DataConnection:
+    def get_connection(self, user_id: str, encryption_provider: EncryptionProdiver = None) -> DataConnection:
         pass
 
     @abstractmethod
-    def check_data_exist(self, user_id: int) -> bool:
+    def check_data_exist(self, user_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def check_config_exist(self, user_id: str) -> bool:
         pass
 
     @classmethod
@@ -57,7 +62,7 @@ class DataConnection(ABC):
     def __init__(
         self,
         data_provider: DataProvider,
-        user_id: int,
+        user_id: str,
         encryption_provider: EncryptionProdiver | None,
     ) -> None:
         super().__init__()
@@ -67,12 +72,22 @@ class DataConnection(ABC):
         self._encryption_provider = encryption_provider
 
     @property
-    def user_id(self) -> int:
+    def user_id(self) -> str:
         return self._user_id
 
     @property
     def encrypted(self) -> bool:
         return self._encryption_provider is not None
+
+    @abstractmethod
+    def store_config(self, config: str) -> bool:
+        """Saves serialized config"""
+        pass
+
+    @abstractmethod
+    def load_config(self) -> str | None:
+        """Reads serialized config if exists"""
+        pass
 
     @abstractmethod
     def append_log(self, poll_code: str, log: str) -> bool:
@@ -135,29 +150,32 @@ class SQLLiteProvider(DataProvider):
 
         self._params = SQLLiteProviderParams.parse_obj(params)
 
-    def get_connection(self, user_id: int, encryption_provider: EncryptionProdiver = None) -> DataConnection:
+    def get_connection(self, user_id: str, encryption_provider: EncryptionProdiver = None) -> DataConnection:
         return SQLLiteConnection(self, user_id, encryption_provider)
 
-    def check_data_exist(self, user_id: int) -> bool:
+    def check_data_exist(self, user_id: str) -> bool:
         base_path = self._params.base_path
-        return base_path.joinpath("u" + str(user_id), "data.db").exists()
+        return base_path.joinpath(user_id, "data.db").exists()
+
+    def check_config_exist(self, user_id: str) -> bool:
+        base_path = self._params.base_path
+        return base_path.joinpath(user_id, "config").exists()
 
 
 class SQLLiteConnection(DataConnection):
     def __init__(
         self,
         data_provider: SQLLiteProvider,
-        user_id: int,
+        user_id: str,
         encryption_provider: EncryptionProdiver = None,
     ) -> None:
         super().__init__(data_provider, user_id, encryption_provider)
 
         base_path = data_provider._params.base_path
-        base_path.joinpath("u" + str(self.user_id)).mkdir(exist_ok=True)
+        base_path.joinpath(self.user_id).mkdir(exist_ok=True)
 
         self._engine = engine = sa.create_engine(
-            data_provider._params._base_uri
-            + str(data_provider._params.base_path.joinpath("u" + str(self.user_id), "data.db"))
+            data_provider._params._base_uri + str(data_provider._params.base_path.joinpath(self.user_id, "data.db"))
         )
 
         self._meta = meta = sa.MetaData()
@@ -175,7 +193,36 @@ class SQLLiteConnection(DataConnection):
         with engine.connect() as conn:
             data_table.create(conn, checkfirst=True)
 
-    def append_log(self, poll_code: str, log: str) -> bool:
+    def store_config(self, config: str) -> bool:
+        assert isinstance(self._data_provider, SQLLiteProvider)
+
+        config_path = self._data_provider._params.base_path.joinpath(self.user_id, "config")
+
+        assert isinstance(config_path, Path)
+
+        try:
+            config_path.write_bytes(self._encryption_provider.encrypt(config.encode()))
+        except OSError:
+            return False
+
+        return True
+
+    def load_config(self) -> str | None:
+        assert isinstance(self._data_provider, SQLLiteProvider)
+
+        config_path = self._data_provider._params.base_path.joinpath(self.user_id, "config")
+
+        assert isinstance(config_path, Path)
+
+        if not config_path.exists():
+            return None
+        else:
+            if self.encrypted:
+                return self._encryption_provider.decrypt(config_path.read_bytes()).decode()
+            else:
+                return config_path.read_bytes().decode()
+
+    def append_log(self, poll_code: str, log: str) -> int | None:
         now = datetime.datetime.now()
 
         log_out = log.encode()
@@ -195,9 +242,9 @@ class SQLLiteConnection(DataConnection):
             result = conn.execute(stmt)
 
             if result.rowcount == 1:
-                return True
+                return result.inserted_primary_key[0]
             else:
-                return False
+                return None
 
     def _query_and_decrypt(self, stmt: Select) -> List[Tuple[Any, str]]:
         ret = []

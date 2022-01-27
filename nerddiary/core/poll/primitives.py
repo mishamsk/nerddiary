@@ -29,7 +29,7 @@ class TimeZone(datetime.tzinfo):
     @classmethod
     def validate(cls, v):
         if not isinstance(v, str):
-            raise TypeError("string required")
+            raise TypeError("Valid timezone string required")
         try:
             tz = pytz.timezone(v)
         except pytz.UnknownTimeZoneError:
