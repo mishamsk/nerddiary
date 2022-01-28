@@ -30,7 +30,7 @@ class EncryptionProdiver:
         self._salt = secrets.token_bytes(16)
         self._key = _derive_key(password.encode(), self._salt, self._iterations)
 
-    def encrypt(self, message: bytes, iterations: int = ITERATIONS) -> bytes:
+    def encrypt(self, message: bytes) -> bytes:
         return b64e(
             b"%b%b%b"
             % (
