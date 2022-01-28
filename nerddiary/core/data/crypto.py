@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 BACKEND = default_backend()
-ITERATIONS = 100000
+ITERATIONS = 390000
 
 
 def _derive_key(password: bytes, salt: bytes, iterations: int = ITERATIONS) -> bytes:
@@ -24,18 +24,19 @@ def _derive_key(password: bytes, salt: bytes, iterations: int = ITERATIONS) -> b
 
 
 class EncryptionProdiver:
-    def __init__(self, password: str) -> None:
+    def __init__(self, password: str, iterations: int = ITERATIONS) -> None:
         self._password = password
+        self._iterations = iterations
+        self._salt = secrets.token_bytes(16)
+        self._key = _derive_key(password.encode(), self._salt, self._iterations)
 
     def encrypt(self, message: bytes, iterations: int = ITERATIONS) -> bytes:
-        salt = secrets.token_bytes(16)
-        key = _derive_key(self._password.encode(), salt, iterations)
         return b64e(
             b"%b%b%b"
             % (
-                salt,
-                iterations.to_bytes(4, "big"),
-                b64d(Fernet(key).encrypt(message)),
+                self._salt,
+                self._iterations.to_bytes(4, "big"),
+                b64d(Fernet(self._key).encrypt(message)),
             )
         )
 
@@ -43,5 +44,8 @@ class EncryptionProdiver:
         decoded = b64d(token)
         salt, iter, token = decoded[:16], decoded[16:20], b64e(decoded[20:])
         iterations = int.from_bytes(iter, "big")
-        key = _derive_key(self._password.encode(), salt, iterations)
+        if salt != self._salt or iterations != self._iterations:
+            key = _derive_key(self._password.encode(), salt, iterations)
+        else:
+            key = self._key
         return Fernet(key).decrypt(token)

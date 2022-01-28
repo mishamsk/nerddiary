@@ -205,7 +205,7 @@ class TestSQLLiteConnection:
     def test_performance(self, test_data_connection):
         start_time = time.time()
 
-        for i in range(1, 50):
+        for i in range(1, 2500):
             log = json.dumps([i, random.randrange(1, i * 100)])
             test_data_connection.append_log("headache", log)
 
