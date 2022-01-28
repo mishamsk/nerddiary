@@ -11,7 +11,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 from pydantic.fields import Field
 
 from ..poll.poll import Poll
-from ..poll.primitives import TimeZone
+from ..primitive.timezone import TimeZone
 from ..report.report import Report
 
 from typing import Dict, List, Optional

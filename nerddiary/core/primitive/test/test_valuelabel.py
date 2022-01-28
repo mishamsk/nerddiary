@@ -1,4 +1,4 @@
-from nerddiary.core.poll.primitives import ValueLabel
+from nerddiary.core.primitive.valuelabel import ValueLabel
 
 import pytest
 from pydantic import ValidationError

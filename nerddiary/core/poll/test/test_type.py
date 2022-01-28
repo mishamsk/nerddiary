@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 
-from nerddiary.core.poll.primitives import ValueLabel
 from nerddiary.core.poll.type import (
     DependantSelectType,
     QuestionType,
@@ -9,6 +8,7 @@ from nerddiary.core.poll.type import (
     TimestampType,
     UnsupportedAnswerError,
 )
+from nerddiary.core.primitive.valuelabel import ValueLabel
 
 import pytest
 from pydantic import ValidationError

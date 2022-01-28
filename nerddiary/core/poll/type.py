@@ -10,7 +10,7 @@ import re
 from pydantic import BaseModel, conlist, validator
 from pydantic.fields import Field, PrivateAttr
 
-from .primitives import ValueLabel
+from ..primitive.valuelabel import ValueLabel
 
 import typing as t
 
