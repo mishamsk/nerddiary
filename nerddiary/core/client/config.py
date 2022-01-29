@@ -4,7 +4,7 @@ import datetime
 import logging
 
 import pytz
-from pydantic import BaseSettings, PrivateAttr, ValidationError, validator
+from pydantic import BaseSettings, ValidationError, validator
 from pydantic.fields import Field
 
 from ..data.data import DataProvider
@@ -22,7 +22,6 @@ class NerdDiaryConfig(BaseSettings):
 
     default_user: Optional[User]
 
-    _data_provider: DataProvider = PrivateAttr()
     data_provider_name: str = Field(default="sqllite", description="Data provider to use to srote poll answers")
     """ Data provider to use to srote poll answers """
 
@@ -41,10 +40,12 @@ class NerdDiaryConfig(BaseSettings):
 
         return v
 
-    def __init__(self, **data) -> None:
-        super().__init__(**data)
+    @validator("data_provider_params")
+    def data_provider_params_must_be_supported(cls, v, values: Dict[str, Any]):
+        if not DataProvider.validate_params(values["data_provider_name"], v):
+            raise ValueError(f"Incorrect data provider params <{v}> for data provider <{values['data_provider_name']}>")
 
-        self._data_provider = DataProvider.get_data_provider(self.data_provider_name, self.data_provider_params)
+        return v
 
     class Config:
         title = "NerdDiary Configuration Model"

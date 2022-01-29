@@ -5,7 +5,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 import sqlalchemy as sa
-from pydantic import BaseModel, DirectoryPath, PrivateAttr
+from cryptography.fernet import InvalidToken
+from pydantic import BaseModel, DirectoryPath, PrivateAttr, ValidationError
 from sqlalchemy.dialects.sqlite import BLOB
 from sqlalchemy.sql.expression import Select
 
@@ -38,7 +39,7 @@ class DataProvider(ABC):
         return all_subclasses(cls)
 
     @abstractmethod
-    def get_connection(self, user_id: str, encryption_provider: EncryptionProdiver = None) -> DataConnection:
+    def get_connection(self, user_id: str, password_or_key: str | bytes | None) -> DataConnection:
         pass
 
     @abstractmethod
@@ -48,6 +49,31 @@ class DataProvider(ABC):
     @abstractmethod
     def check_config_exist(self, user_id: str) -> bool:
         pass
+
+    @abstractmethod
+    def check_lock_exist(self, user_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_lock(self, user_id: str) -> bytes | None:
+        pass
+
+    @abstractmethod
+    def save_lock(self, user_id: str, lock: bytes) -> bool:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def _validate_params(cls, params: Dict[str, Any] | None) -> bool:
+        pass
+
+    @classmethod
+    def validate_params(cls, name: str, params: Dict[str, Any] | None) -> bool:
+
+        if name not in cls.supported_providers:
+            raise NotImplementedError(f"Data provider {name} doesn't exist")
+
+        return cls.supported_providers[name]._validate_params(params)
 
     @classmethod
     def get_data_provider(cls, name: str, params: Dict[str, Any] | None) -> DataProvider:
@@ -150,16 +176,79 @@ class SQLLiteProvider(DataProvider):
 
         self._params = SQLLiteProviderParams.parse_obj(params)
 
-    def get_connection(self, user_id: str, encryption_provider: EncryptionProdiver = None) -> DataConnection:
-        return SQLLiteConnection(self, user_id, encryption_provider)
+    def get_connection(self, user_id: str, password_or_key: str | bytes | None = None) -> SQLLiteConnection:
+        if password_or_key is None:
+            return SQLLiteConnection(self, user_id, None)
+
+        encr = None
+
+        if not self.check_lock_exist(user_id):
+            if password_or_key is None or not isinstance(password_or_key, str):
+                raise ValueError("A `str` type password must be provided")
+
+            encr = EncryptionProdiver(password_or_key)
+            lock = encr.encrypt(user_id.encode())
+            if not self.save_lock(user_id, lock):
+                raise RuntimeError(f"Unable to save lock file for user_id: <{user_id}>")
+        else:
+            if (
+                password_or_key is None
+                or not isinstance(password_or_key, str)
+                or not isinstance(password_or_key, bytes)
+            ):
+                raise ValueError("Either a `str` password ot `bytes` key must be provided")
+
+            lock = self.get_lock(user_id)
+            try:
+                encr = EncryptionProdiver(password_or_key, init_token=lock, control_message=user_id.encode())
+            except InvalidToken:
+                raise ValueError("Incorrect password or key")
+            except ValueError:
+                raise ValueError("Lock file didn't match this user_id")
+
+        return SQLLiteConnection(self, user_id, encr)
 
     def check_data_exist(self, user_id: str) -> bool:
-        base_path = self._params.base_path
-        return base_path.joinpath(user_id, "data.db").exists()
+        data_path = self._params.base_path.joinpath(user_id, "data.db")
+        return data_path.exists() and data_path.is_file()
 
     def check_config_exist(self, user_id: str) -> bool:
-        base_path = self._params.base_path
-        return base_path.joinpath(user_id, "config").exists()
+        config_path = self._params.base_path.joinpath(user_id, "config")
+        return config_path.exists() and config_path.is_file()
+
+    def check_lock_exist(self, user_id: str) -> bool:
+        lock_path = self._params.base_path.joinpath(user_id, "lock")
+        return lock_path.exists() and lock_path.is_file()
+
+    def get_lock(self, user_id: str) -> bytes | None:
+
+        if not self.check_lock_exist(user_id):
+            return None
+
+        lock_path = self._params.base_path.joinpath(user_id, "lock")
+        return lock_path.read_bytes()
+
+    def save_lock(self, user_id: str, lock: bytes) -> bool:
+        assert isinstance(self._params.base_path, Path)
+
+        self._params.base_path.joinpath(user_id).mkdir(parents=True, exist_ok=True)
+        lock_path = self._params.base_path.joinpath(user_id, "lock")
+
+        try:
+            lock_path.write_bytes(lock)
+        except OSError:
+            return False
+
+        return True
+
+    @classmethod
+    def _validate_params(cls, params: Dict[str, Any] | None) -> bool:
+        try:
+            SQLLiteProviderParams.parse_obj(params)
+        except ValidationError:
+            return False
+
+        return True
 
 
 class SQLLiteConnection(DataConnection):

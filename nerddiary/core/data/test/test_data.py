@@ -2,8 +2,15 @@ import datetime
 import json
 import random
 import time
+from pathlib import Path
 
-from nerddiary.core.data.data import DataConnection, DataProvider, SQLLiteConnection, SQLLiteProvider
+from nerddiary.core.data.data import (
+    DataConnection,
+    DataProvider,
+    SQLLiteConnection,
+    SQLLiteProvider,
+    SQLLiteProviderParams,
+)
 
 import pytest
 import sqlalchemy as sa
@@ -15,6 +22,23 @@ class TestDataProvider:
     def test_abstract(self):
         with pytest.raises(TypeError, match=r"Can't instantiate abstract class.*"):
             DataProvider()  # type: ignore
+
+    def test_classmethods(self):
+        test_provider = "sqllite"
+        test_params = {"base_path": "data"}
+
+        assert DataProvider.validate_params(test_provider, test_params)
+        assert not DataProvider.validate_params(test_provider, {"base_path_missplled": "test"})
+
+        dp = DataProvider.get_data_provider(test_provider, test_params)
+        assert isinstance(dp, SQLLiteProvider)
+        assert dp._params == SQLLiteProviderParams.parse_obj(test_params)
+
+        DataProvider.get_data_provider("non_existent_provider", {"base_path_missplled": "test"})
+
+        with pytest.raises(NotImplementedError) as err:
+            DataProvider.validate_params("non_existent_provider", {"base_path_missplled": "test"})
+        assert err.type == NotImplementedError
 
     def test_supported_providers(self):
         for provider in DataProvider.supported_providers.values():
@@ -40,34 +64,51 @@ class TestSQLLiteProvider:
 
         mockuser_id = "123"
 
+        assert not DataProvider.validate_params("sqllite", {"base_path_missplled": "test"})
+
         # Incorrect params
         with pytest.raises(ValidationError) as err:
             DataProvider.get_data_provider("sqllite", {"base_path_missplled": "test"})
         assert err.type == ValidationError
 
         # Correct params
-        data_path = tmp_path_factory.mktemp("data")
+        data_path: Path = tmp_path_factory.mktemp("data")
         provider = DataProvider.get_data_provider("sqllite", {"base_path": str(data_path)})
 
         assert isinstance(provider, SQLLiteProvider)
         assert provider.check_data_exist(user_id=mockuser_id) is False
         assert provider.check_config_exist(user_id=mockuser_id) is False
+        assert provider.check_lock_exist(user_id=mockuser_id) is False
+        assert provider.get_lock(user_id=mockuser_id) is None
 
-        user_data_path = data_path / mockuser_id / "data.db"
-        user_data_path.mkdir(parents=True, exist_ok=True)
+        base_path = data_path / mockuser_id
+        base_path.mkdir(parents=True, exist_ok=True)
+
+        user_data_path = base_path.joinpath("data.db")
         user_data_path.touch()
         assert provider.check_data_exist(user_id=mockuser_id) is True
 
-        user_conf_path = data_path / mockuser_id / "config"
-        user_conf_path.mkdir(parents=True, exist_ok=True)
+        user_conf_path = base_path.joinpath("config")
         user_conf_path.touch()
         assert provider.check_config_exist(user_id=mockuser_id) is True
 
-    def test_get_connection(self, test_data_provider, test_encryption_provider):
+        user_lock_path = base_path.joinpath("lock")
+        user_lock_path.touch()
+        assert provider.check_lock_exist(user_id=mockuser_id) is True
+        assert provider.get_lock(user_id=mockuser_id) == b""
+
+        provider.save_lock(user_id=mockuser_id, lock=b"test lock")
+        assert provider.get_lock(user_id=mockuser_id) == b"test lock"
+
+    def test_get_connection(self, test_data_provider):
         mockuser_id = "123"
+        # mock_password = "password"
+        # mock_key = b"wrong key"
 
         # Encrypted
-        conn = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
+
+        # New user (no lock)
+        conn = test_data_provider.get_connection(mockuser_id)
 
         assert isinstance(conn, SQLLiteConnection)
         assert conn.encrypted is True
@@ -82,8 +123,10 @@ class TestSQLLiteProvider:
 class TestSQLLiteConnection:
     def test_config(self, mockuser, test_data_provider, test_encryption_provider):
         mockuser_id = "123"
+        mock_password = "password"
 
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
+        assert isinstance(test_data_provider, SQLLiteProvider)
+        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, mock_password)
 
         config = mockuser.json(exclude_unset=True, ensure_ascii=False)
 
