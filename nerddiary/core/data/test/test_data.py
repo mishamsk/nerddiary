@@ -4,6 +4,7 @@ import random
 import time
 from pathlib import Path
 
+from nerddiary.core.data.crypto import EncryptionProdiver
 from nerddiary.core.data.data import (
     DataConnection,
     DataProvider,
@@ -11,6 +12,7 @@ from nerddiary.core.data.data import (
     SQLLiteProvider,
     SQLLiteProviderParams,
 )
+from nerddiary.core.user.user import User
 
 import pytest
 import sqlalchemy as sa
@@ -23,9 +25,9 @@ class TestDataProvider:
         with pytest.raises(TypeError, match=r"Can't instantiate abstract class.*"):
             DataProvider()  # type: ignore
 
-    def test_classmethods(self):
+    def test_classmethods(self, test_data_path):
         test_provider = "sqllite"
-        test_params = {"base_path": "data"}
+        test_params = {"base_path": str(test_data_path)}
 
         assert DataProvider.validate_params(test_provider, test_params)
         assert not DataProvider.validate_params(test_provider, {"base_path_missplled": "test"})
@@ -33,8 +35,6 @@ class TestDataProvider:
         dp = DataProvider.get_data_provider(test_provider, test_params)
         assert isinstance(dp, SQLLiteProvider)
         assert dp._params == SQLLiteProviderParams.parse_obj(test_params)
-
-        DataProvider.get_data_provider("non_existent_provider", {"base_path_missplled": "test"})
 
         with pytest.raises(NotImplementedError) as err:
             DataProvider.validate_params("non_existent_provider", {"base_path_missplled": "test"})
@@ -102,36 +102,76 @@ class TestSQLLiteProvider:
 
     def test_get_connection(self, test_data_provider):
         mockuser_id = "123"
-        # mock_password = "password"
-        # mock_key = b"wrong key"
+        mock_password = "password"
+        mock_key = b"wrong key"
+        assert isinstance(test_data_provider, SQLLiteProvider)
 
         # Encrypted
 
         # New user (no lock)
-        conn = test_data_provider.get_connection(mockuser_id)
+
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_key)
+        assert err.type == ValueError and err.value.args == (
+            "No lock file for this user. A `str` type password must be provided",
+        )
+
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+        assert isinstance(conn, SQLLiteConnection)
+        assert conn.encrypted is True
+
+        # Known user (lock file found)
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id)
+        assert err.type == ValueError and err.value.args == (
+            "Lock file found. Either a `str` password ot `bytes` key must be provided",
+        )
+
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
 
         assert isinstance(conn, SQLLiteConnection)
         assert conn.encrypted is True
 
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=conn.key)
+
+        assert isinstance(conn, SQLLiteConnection)
+        assert conn.encrypted is True
+
+        assert conn.key
+        key = conn.key
+        lock = test_data_provider.get_lock(user_id=mockuser_id)
+        base_path = test_data_provider._params.base_path / mockuser_id
+        user_lock_path = base_path.joinpath("lock")
+        user_lock_path.write_bytes(EncryptionProdiver(password_or_key=key, init_token=lock).encrypt(b"wrong_user_id"))
+
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=key)
+        assert err.type == ValueError and err.value.args == ("Lock file didn't match this user_id",)
+
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key="wrong password")
+        assert err.type == ValueError and err.value.args == ("Incorrect password or key",)
+
         # Not Encrypted
-        conn = test_data_provider.get_connection(mockuser_id)
+        mockuser_id = "1234"
+        conn = test_data_provider.get_connection(user_id=mockuser_id)
 
         assert isinstance(conn, SQLLiteConnection)
         assert conn.encrypted is False
 
 
 class TestSQLLiteConnection:
-    def test_config(self, mockuser, test_data_provider, test_encryption_provider):
-        mockuser_id = "123"
+    def test_config(self, mockuser, test_data_provider):
+        assert isinstance(mockuser, User)
+        assert isinstance(test_data_provider, SQLLiteProvider)
         mock_password = "password"
 
-        assert isinstance(test_data_provider, SQLLiteProvider)
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, mock_password)
+        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser.id, mock_password)
 
         config = mockuser.json(exclude_unset=True, ensure_ascii=False)
 
         assert conn.store_config(config)
-        config_path = test_data_provider._params.base_path.joinpath(mockuser_id, "config")
+        config_path = test_data_provider._params.base_path.joinpath(mockuser.id, "config")
 
         # Validate data was encrypted
         assert config_path.read_bytes().decode() != config
@@ -139,10 +179,12 @@ class TestSQLLiteConnection:
         # Check correct loading of the config back
         assert conn.load_config() == config
 
-    def test_connection(self, test_data_provider, test_encryption_provider):
-        mockuser_id = "123"
+    def test_connection(self, mockuser, test_data_provider):
+        assert isinstance(mockuser, User)
+        assert isinstance(test_data_provider, SQLLiteProvider)
+        mock_password = "password"
 
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser_id, test_encryption_provider)
+        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser.id, mock_password)
 
         poll_code_1 = "poll1"
         poll_code_2 = "poll2"
@@ -163,7 +205,7 @@ class TestSQLLiteConnection:
         # Test data is encrypted at rest
         engine = sa.create_engine(
             test_data_provider._params._base_uri
-            + str(test_data_provider._params.base_path.joinpath(mockuser_id, "data.db"))
+            + str(test_data_provider._params.base_path.joinpath(mockuser.id, "data.db"))
         )
 
         meta = sa.MetaData()

@@ -12,18 +12,22 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.performance)
 
 
-@pytest.fixture(scope="module")
-def test_data_provider(tmp_path_factory):
-    data_path = tmp_path_factory.mktemp("data")
-    return DataProvider.get_data_provider("sqllite", {"base_path": str(data_path)})
+@pytest.fixture(scope="class")
+def test_data_path(tmp_path_factory):
+    return tmp_path_factory.mktemp("data")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
+def test_data_provider(test_data_path):
+    return DataProvider.get_data_provider("sqllite", {"base_path": str(test_data_path)})
+
+
+@pytest.fixture(scope="class")
 def test_encryption_provider():
     return EncryptionProdiver("test passwrod")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def mockpoll():
     json = """
     {
@@ -106,7 +110,7 @@ def mockpoll():
     return Poll.parse_raw(json)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def mockuser(mockpoll):
     user = User(
         id="123",
@@ -119,6 +123,6 @@ def mockuser(mockpoll):
     return user
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def test_data_connection(mockuser, test_data_provider, test_encryption_provider):
     return test_data_provider.get_connection(mockuser.id, test_encryption_provider)

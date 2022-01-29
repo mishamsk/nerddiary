@@ -102,6 +102,10 @@ class DataConnection(ABC):
         return self._user_id
 
     @property
+    def key(self) -> bytes | None:
+        return self._encryption_provider.key if self._encryption_provider else None
+
+    @property
     def encrypted(self) -> bool:
         return self._encryption_provider is not None
 
@@ -177,26 +181,25 @@ class SQLLiteProvider(DataProvider):
         self._params = SQLLiteProviderParams.parse_obj(params)
 
     def get_connection(self, user_id: str, password_or_key: str | bytes | None = None) -> SQLLiteConnection:
-        if password_or_key is None:
-            return SQLLiteConnection(self, user_id, None)
 
         encr = None
 
         if not self.check_lock_exist(user_id):
-            if password_or_key is None or not isinstance(password_or_key, str):
-                raise ValueError("A `str` type password must be provided")
+            if password_or_key is None:
+                return SQLLiteConnection(self, user_id, None)
+
+            if not isinstance(password_or_key, str):
+                raise ValueError("No lock file for this user. A `str` type password must be provided")
 
             encr = EncryptionProdiver(password_or_key)
             lock = encr.encrypt(user_id.encode())
             if not self.save_lock(user_id, lock):
                 raise RuntimeError(f"Unable to save lock file for user_id: <{user_id}>")
         else:
-            if (
-                password_or_key is None
-                or not isinstance(password_or_key, str)
-                or not isinstance(password_or_key, bytes)
+            if password_or_key is None or (
+                not isinstance(password_or_key, str) and not isinstance(password_or_key, bytes)
             ):
-                raise ValueError("Either a `str` password ot `bytes` key must be provided")
+                raise ValueError("Lock file found. Either a `str` password ot `bytes` key must be provided")
 
             lock = self.get_lock(user_id)
             try:
