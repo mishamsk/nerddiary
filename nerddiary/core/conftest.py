@@ -24,10 +24,10 @@ def test_encryption_provider():
 
 
 @pytest.fixture(scope="module")
-def mockuser():
+def mockpoll():
     json = """
     {
-        "poll_name": "headache",
+        "poll_name": "Headache",
         "command": "head",
         "description": "Headache poll!",
         "reminder_time": "20:00",
@@ -35,43 +35,85 @@ def mockuser():
         "hours_over_midgnight": 2,
         "questions": [
             {
-                "code": "q1",
-                "type": {
-                    "select": [
-                        {"No": "😀 No"},
-                        {"Yes": "😭 Yes"}
-                    ]
-                }
+                "type": "relative_timestamp",
+                "code": "start_time",
+                "name": "When did it start?",
+                "description": "Type in how many hours ago did it start aching"
             },
             {
-                "code": "q2",
-                "depends_on": "q1",
+                "type": {
+                    "select": [
+                        {"No": "😭 No"},
+                        {"Yes": "😀 Yes"}
+                    ]
+                },
+                "code": "finished",
+                "name": "Has it finished?",
+                "description": "If you still experience headche - answer No and I will ask again in 3 hours",
+                "ephemeral": true,
+                "delay_time": 2,
+                "delay_on": ["No"]
+            },
+            {
+                "type": {
+                    "select": [
+                        {"tension": "😬 Tension"},
+                        {"migraine": "😰 Migraine"},
+                        {"other": "🤷‍♀️ Other"}
+                    ]
+                },
+                "code": "headache_type",
+                "name": "What type of headache was it?",
+                "description": "Choose among provided headache types"
+            },
+            {
+                "type": {
+                    "select": [
+                        {"ibuprofen": "😬 Tension"},
+                        {"nurtec": "😰 Migraine"},
+                        {"none": "🤷‍♀️ Other"}
+                    ]
+                },
+                "code": "drug_type",
+                "name": "What drug did you use?",
+                "description": "Choose among provided drugs or select none if you did not take any"
+            },
+            {
                 "type": {
                     "select": {
-                        "No": [
-                            {"NoNo": "😀 No"},
-                            {"NoYes": "😭 Yes"}
+                        "ibuprofen": [
+                            {"200": "💊 200"},
+                            {"400": "💊💊 400"}
                         ],
-                        "Yes": [
-                            {"YesNo": "😀 No"},
-                            {"YesYes": "😭 Yes"}
+                        "nurtec": [
+                            {"1": "💊 1"},
+                            {"2": "💊💊 2"}
+                        ],
+                        "none": [
+                            {"0": "No 💊 today!"}
                         ]
                     }
-                }
+                },
+                "code": "drug_dose",
+                "name": "What dose?",
+                "description": "Choose among provided drugs or select none if you did not take any",
+                "depends_on": "drug_type"
             }
         ]
     }
     """
 
-    p = Poll.parse_raw(json)
+    return Poll.parse_raw(json)
+
+
+@pytest.fixture(scope="module")
+def mockuser(mockpoll):
     user = User(
         id="123",
         username="test_user",
-        encrypt_data=True,
-        password="simple password",
         lang_code="ru",
         timezone="Europe/Moscow",
-        polls=[p],
+        polls=[mockpoll],
         reports=[],
     )
     return user
