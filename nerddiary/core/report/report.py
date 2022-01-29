@@ -10,4 +10,4 @@ logger = logging.getLogger("nerddiary.bot.model")
 
 
 class Report(BaseModel):
-    pass
+    name: str
