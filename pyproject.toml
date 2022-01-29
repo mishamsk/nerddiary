@@ -49,6 +49,7 @@ nerddiary = 'nerddiary.cli:cli'
 minversion = "6.0"
 addopts = "--basetemp=testtemp -m 'not performance'"
 markers = "performance: mark a test as a performance test, skipped by default."
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 omit = ["*/test/*"]
