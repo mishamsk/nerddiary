@@ -114,7 +114,7 @@ class TestUser:
 
         json = """
         {
-            "id":"123ABCD",
+            "id":"123ABCD"
         }
         """
 
