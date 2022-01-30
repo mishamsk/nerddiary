@@ -118,7 +118,6 @@ def mockuser(mockpoll):
         lang_code="ru",
         timezone="Europe/Moscow",
         polls=[mockpoll],
-        reports=[],
     )
     return user
 
