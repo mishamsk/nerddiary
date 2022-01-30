@@ -60,11 +60,11 @@ class EncryptionProdiver:
 
     @property
     def salt(self) -> bytes:
-        return self._salt
+        return self._salt  # pragma: no cover
 
     @property
     def iterations(self) -> int:
-        return self._iterations
+        return self._iterations  # pragma: no cover
 
     @property
     def key(self) -> bytes:

@@ -67,10 +67,11 @@ test-performance: ## run tests quickly with the default Python
 # test-all: ## run tests on every Python version with tox
 # 	tox
 
+cov-path: ## check code coverage using pytest for a path (set with path=), report to terminal
+	pytest --cov=$(path) --cov-report term:skip-covered $(path)
+
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source nerddiary -m pytest
-	coverage report -m
-	coverage html
+	pytest --cov=nerddiary --cov-report html --cov-report term:skip-covered
 # 	$(BROWSER) htmlcov/index.html
 
 # docs: ## generate Sphinx HTML documentation, including API docs

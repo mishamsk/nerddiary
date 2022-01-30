@@ -41,6 +41,7 @@ coverage = {extras = ["toml"], version = "^6.2"}
 isort = "^5.10.1"
 pre-commit = "^2.17.0"
 pytest-asyncio = "^0.17.2"
+pytest-cov = "^3.0.0"
 
 [tool.poetry.scripts]
 nerddiary = 'nerddiary.cli:cli'
@@ -52,7 +53,7 @@ markers = "performance: mark a test as a performance test, skipped by default."
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-omit = ["*/test/*"]
+omit = ["*/test/*", "**/conftest.py"]
 
 [tool.coverage.report]
 omit = ["*/test/*"]

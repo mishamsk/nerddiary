@@ -13,7 +13,7 @@ class ValueLabel(BaseModel):
 
     @root_validator(pre=True)
     def check_and_convert_value_label_dict(cls, values: Dict[Any, Any]):
-        if len(values) > 2:
+        if len(values) > 2:  # pragma: no cover
             raise ValueError(
                 'Valuelabel may only be defined in either {"value": value, "label": label} or {"value": "label"} formats'
             )

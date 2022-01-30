@@ -14,7 +14,7 @@ from ..primitive.valuelabel import ValueLabel
 
 import typing as t
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from nerddiary.core.user.user import User
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class QuestionType(BaseModel, abc.ABC):
 
     @abc.abstractmethod
     def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
-        pass
+        pass  # pragma: no cover
 
     def get_value_from_answer(
         self, answer: str, dep_value: t.Any | None = None, user: User | None = None
@@ -79,7 +79,7 @@ class QuestionType(BaseModel, abc.ABC):
 
     @abc.abstractmethod
     def get_serializable_value(self, value: ValueLabel) -> str:
-        pass
+        pass  # pragma: no cover
 
     def get_answer_options(self, dep_value: t.Any | None = None, user: User | None = None) -> t.List[ValueLabel] | None:
         if self.is_auto:

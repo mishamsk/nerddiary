@@ -13,10 +13,7 @@ from sqlalchemy.sql.expression import Select
 
 from .crypto import EncryptionProdiver
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Tuple, Type
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, ClassVar, Dict, List, Tuple, Type
 
 
 class DataCorruptionType(enum.Enum):
@@ -27,7 +24,7 @@ class DataCorruptionType(enum.Enum):
     DATA_NO_LOCK = enum.auto()
 
 
-class DataCorruptionError(Exception):
+class DataCorruptionError(Exception):  # pragma: no cover
     def __init__(self, type: DataCorruptionType = DataCorruptionType.UNDEFINED) -> None:
         self.type = type
         super().__init__(type)
@@ -97,7 +94,7 @@ class DataProvider(ABC):
             encr = EncryptionProdiver(password_or_key)
             lock = encr.encrypt(user_id.encode())
             if not self.save_lock(user_id, lock):
-                raise DataCorruptionError(DataCorruptionType.LOCK_WRITE_FAILURE)
+                raise DataCorruptionError(DataCorruptionType.LOCK_WRITE_FAILURE)  # pragma: no cover
         else:
             if not isinstance(password_or_key, str) and not isinstance(password_or_key, bytes):
                 raise ValueError("Lock file found. Either a `str` password ot `bytes` key must be provided")
@@ -114,32 +111,32 @@ class DataProvider(ABC):
 
     @abstractmethod
     def _get_connection(self, user_id: str, encr: EncryptionProdiver) -> DataConnection:
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def check_data_exist(self, user_id: str) -> bool:
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def check_config_exist(self, user_id: str) -> bool:
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def check_lock_exist(self, user_id: str) -> bool:
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_lock(self, user_id: str) -> bytes | None:
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def save_lock(self, user_id: str, lock: bytes) -> bool:
-        pass
+        pass  # pragma: no cover
 
     @classmethod
     @abstractmethod
     def _validate_params(cls, params: Dict[str, Any] | None) -> bool:
-        pass
+        pass  # pragma: no cover
 
     @classmethod
     def validate_params(cls, name: str, params: Dict[str, Any] | None) -> bool:
@@ -182,25 +179,25 @@ class DataConnection(ABC):
     @abstractmethod
     def store_config(self, config: str) -> bool:
         """Saves serialized config"""
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def load_config(self) -> str | None:
         """Reads serialized config if exists"""
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def append_log(self, poll_code: str, log: str) -> bool:
         """Appends a single serialized `log` for a given `poll_code`"""
-        pass
+        pass  # pragma: no cover
 
     def update_log(self, id: Any, log: str) -> bool:
         """Updates a log identified by `id` with a new serialized `log`"""
-        raise NotImplementedError("This provider doesn't support row updates")
+        raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
     def get_all_logs(self) -> List[Tuple[Any, str]]:
         """Get all serialized logs"""
-        raise NotImplementedError("This provider doesn't support row updates")
+        raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
     def get_log(self, id: Any) -> Tuple[Any, str]:
         """Get a single serialized log identified by `id`"""
@@ -215,7 +212,7 @@ class DataConnection(ABC):
         ids: List[Any],
     ) -> List[Tuple[Any, str]]:
         """Get a list of serialized logs identified by `ids`"""
-        raise NotImplementedError("This provider doesn't support retrieving rows")
+        raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
     def get_poll_logs(
         self,
@@ -225,7 +222,7 @@ class DataConnection(ABC):
         max_rows: int = None,
     ) -> List[Tuple[Any, str]]:
         """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`"""
-        raise NotImplementedError("This provider doesn't support retrieving rows")
+        raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
     def get_last_n_logs(self, poll_code: str, count: int) -> List[Tuple[Any, str]]:
         return self.get_poll_logs(poll_code, max_rows=count)
@@ -281,7 +278,7 @@ class SQLLiteProvider(DataProvider):
 
         try:
             lock_path.write_bytes(lock)
-        except OSError:
+        except OSError:  # pragma: no cover
             return False
 
         return True
@@ -336,7 +333,7 @@ class SQLLiteConnection(DataConnection):
 
         try:
             config_path.write_bytes(self._encryption_provider.encrypt(config.encode()))
-        except OSError:
+        except OSError:  # pragma: no cover
             return False
 
         return True

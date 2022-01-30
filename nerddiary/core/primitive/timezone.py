@@ -7,7 +7,7 @@ import datetime
 import pytz
 
 
-class TimeZone(datetime.tzinfo):
+class TimeZone(datetime.tzinfo):  # pragma: no cover
     """Custom pydantic type wrapper for timezone"""
 
     @classmethod
