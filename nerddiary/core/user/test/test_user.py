@@ -180,3 +180,81 @@ class TestUser:
 
         # all errors caught
         assert len(must_error) == 0
+
+        # polls & reports exist but empty
+        json = """
+        {
+            "id":"123",
+            "polls": [],
+            "reports": []
+        }
+        """
+
+        with pytest.raises(ValidationError) as err:
+            User.parse_raw(json)
+        assert err.type == ValidationError
+
+        must_error = {
+            "polls",
+            "reports",
+        }
+        for v_err in err.value.errors():
+            match v_err["loc"]:
+                case ("polls",) as mtch:
+                    assert v_err["type"] == "value_error.list.min_items"
+                    must_error.remove(mtch[0])
+                case ("reports",) as mtch:
+                    assert v_err["type"] == "value_error.list.min_items"
+                    must_error.remove(mtch[0])
+                case _ as mtch:
+                    assert False, f"Unexpected error caught: {str(mtch)}"
+
+        # all errors caught
+        assert len(must_error) == 0
+
+        # duplicate poll name
+        json = """
+        {
+            "id":"123ABC",
+            "polls": [{
+                "poll_name": "Headache",
+                "questions": [
+                    {
+                        "type": "relative_timestamp",
+                        "code": "start_time",
+                        "name": "When did it start?"
+                    }
+                ]
+            },
+            {
+                "poll_name": "Headache",
+                "questions": [
+                    {
+                        "type": "relative_timestamp",
+                        "code": "start_time",
+                        "name": "When did it start?"
+                    }
+                ]
+            }
+            ],
+            "reports": [{"name": "test"}]
+        }
+        """
+
+        with pytest.raises(ValidationError) as err:
+            User.parse_raw(json)
+        assert err.type == ValidationError
+
+        must_error = {
+            "polls",
+        }
+        for v_err in err.value.errors():
+            match v_err["loc"]:
+                case ("polls",) as mtch:
+                    assert v_err["type"] == "value_error" and v_err["msg"] == "Poll names must be unique"
+                    must_error.remove(mtch[0])
+                case _ as mtch:
+                    assert False, f"Unexpected error caught: {str(mtch)}"
+
+        # all errors caught
+        assert len(must_error) == 0
