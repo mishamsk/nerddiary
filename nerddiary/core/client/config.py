@@ -4,7 +4,7 @@ import datetime
 import logging
 
 import pytz
-from pydantic import BaseSettings, ValidationError, validator
+from pydantic import BaseSettings, DirectoryPath, ValidationError, validator
 from pydantic.fields import Field
 
 from ..data.data import DataProvider
@@ -18,9 +18,16 @@ logger = logging.getLogger(__name__)
 
 class NerdDiaryConfig(BaseSettings):
 
+    session_base_path: DirectoryPath = Field(
+        default=DirectoryPath("data"),
+        description="Session data storage base path (used for session storing data on disk)",
+    )
+
     default_timezone: TimeZone = Field(default=pytz.timezone("US/Eastern"))
 
-    default_user: Optional[User]
+    default_user: Optional[User] = Field(
+        default=None, description="Optional default user config used to register a new user"
+    )
 
     data_provider_name: str = Field(default="sqllite", description="Data provider to use to srote poll answers")
     """ Data provider to use to srote poll answers """

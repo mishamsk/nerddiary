@@ -7,6 +7,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..data.data import DataProvider
 from .config import NerdDiaryConfig
+from .job import Job
+from .session.session import Session
+from .session.string import StringSession
+
+from typing import Callable, Coroutine, Dict, Type
 
 # import typing as t
 
@@ -14,12 +19,25 @@ logger = logging.getLogger(__name__)
 
 
 class NerdDiary:
-    def __init__(self, session: str = "default", config: NerdDiaryConfig = NerdDiaryConfig()) -> None:
-        self.config = config
+    def __init__(self, session: str | Session = "default", config: NerdDiaryConfig = NerdDiaryConfig()) -> None:
+        self._config = config
+
+        if isinstance(session, str):
+            self._session = StringSession(name=session)
+        else:
+            self._session = session
+
         self._running = False
         self._stop = None
+        self._job_queue: asyncio.Queue | None = None
+        self._job_dispatcher = None
+        self._job_subscribers: Dict[Type[Job], Callable[[Job], Coroutine[None, None, bool]]] = {}
         self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)
         self._scheduler = AsyncIOScheduler()
+
+    @property
+    def session(self) -> Session:
+        return self._session
 
     async def start(self):
         try:
@@ -28,14 +46,58 @@ class NerdDiary:
             raise RuntimeError("Start the loop before starting NerdDiary client")
 
         self._stop = asyncio.Future()
+        self._job_queue = asyncio.Queue()
+        await self._session.create_session()
+        self._job_dispatcher = asyncio.create_task(self._dispatch_job())
 
         self._scheduler.start()
         self._running = True
 
+    async def _dispatch_job(self):
+        while self._running:
+            # Wait for subscribers
+            if len(self._job_subscribers):
+                await asyncio.sleep(1)
+
+            job = await self._job_queue.get()
+
+            res = False
+            for type, callback in self._job_subscribers.items():
+                # Dispatch only if job type matches subscribed type
+                if not isinstance(job, type):
+                    continue
+
+                try:
+                    res = await callback(job)
+                except Exception as exc:
+                    logger.warning(
+                        f"Exception while processing job <{job}> with callback <{callback.__module__}.{callback.__name__}>",
+                        exc_info=exc,
+                    )
+
+                if res:
+                    self._job_queue.task_done()
+                    break
+
+            if not res:
+                logger.warning(f"Job <{job}> failed to process by any of the subscribers. Skipping")
+                self._job_queue.task_done()
+
+            await asyncio.sleep(0.1)
+
     async def close(self):
+        if self._running:
+            # Stop any internal loops
+            self.stop()
+
+        # If job dispatcher exist, wait for it to stop
+        if self._job_dispatcher:
+            await self._job_dispatcher
+
         # Remove all jobs and shutdown the scheduler
         self._scheduler.remove_all_jobs()
         self._scheduler.shutdown()
+        await self._session.close_session()
 
     def stop(self):
         self._running = False
@@ -47,11 +109,16 @@ class NerdDiary:
         if loop.is_running():
             await self.start()
         else:
-            pass
+            loop.run_until_complete(self.start())
 
     async def __aexit__(self, *exc_info):
         logger.error("Exception caught before client was closed", exc_info=exc_info)
-        await self.close()
+
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            await self.close()
+        else:
+            loop.run_until_complete(self.close())
 
     # @classmethod
     # def from_file(

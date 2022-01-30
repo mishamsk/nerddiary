@@ -4,14 +4,16 @@ import logging
 from copy import deepcopy
 from io import StringIO
 
-from nerddiary.bot.model import Poll, Question, User, ValueLabel
+from ..primitive.valuelabel import ValueLabel
+from ..user.user import User
+from .poll import Poll, Question
 
 from typing import Dict, List, Tuple, cast
 
 logger = logging.getLogger("nerddiary.bot.workflow")
 
 
-class BotWorkflow:
+class PollWorkflow:
     def __init__(self, poll: Poll, user: User) -> None:
         if not isinstance(poll, Poll):
             raise ValueError("Poll must be an instance of `Poll` class")

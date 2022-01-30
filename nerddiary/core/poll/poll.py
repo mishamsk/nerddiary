@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 class Poll(BaseModel):
     """Represents a single poll"""
 
-    poll_name: str = Field(max_length=30, description="User facing name")  # type: ignore # noqa: F722
-    """ User facing name """
+    poll_name: str = Field(max_length=30, description="User facing name. Must be unique for a single user")  # type: ignore # noqa: F722
+    """ User facing name. Must be unique for a single user """
 
     command: str = Field(default=None, max_length=32, regex=r"^[\da-z_]{1,32}$", description="Command for user call (api or in a bot). If none is given poll_name may be used if it fits the format after replacing whitespace with _")  # type: ignore # noqa: F722
 
