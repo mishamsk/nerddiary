@@ -84,7 +84,7 @@ class EncryptionProdiver:
     def decrypt(self, token: bytes) -> bytes:
         """Validates the message has the same salt & iterations stored and then decrypts the message.
 
-        Throws `ValueError` if salt or iterations mismatch, which means that the password used to derive the key may have been correct, but the sale/iterations used were wrong
+        Throws `ValueError` if salt or iterations mismatch, which means that the password used to derive the key may have been correct, but the salt/iterations used were wrong
 
         Throws `cryptography.fernet.InvalidToken` if salt and iterations match but decryption failed (meaning somehow the correct salt/iteration was given during initialization but the password is incorrect)
         """

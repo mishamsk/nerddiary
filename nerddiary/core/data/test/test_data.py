@@ -7,7 +7,10 @@ from pathlib import Path
 from nerddiary.core.data.crypto import EncryptionProdiver
 from nerddiary.core.data.data import (
     DataConnection,
+    DataCorruptionError,
+    DataCorruptionType,
     DataProvider,
+    IncorrectPasswordKeyError,
     SQLLiteConnection,
     SQLLiteProvider,
     SQLLiteProviderParams,
@@ -50,6 +53,77 @@ class TestDataProvider:
         with pytest.raises(NotImplementedError) as err:
             DataProvider.get_data_provider("non_existent_provider", {"base_path_missplled": "test"})
         assert err.type == NotImplementedError
+
+    def test_get_connection(self, test_data_provider):
+        mockuser_id = "123"
+        mock_password = "password"
+        mock_key = b"wrong key"
+        assert isinstance(test_data_provider, SQLLiteProvider)
+
+        # Encrypted
+
+        # New user (no lock)
+
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_key)
+        assert err.type == ValueError and err.value.args == (
+            "No lock file for this user. A `str` type password must be provided",
+        )
+
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+        assert isinstance(conn, SQLLiteConnection)
+
+        # Known user (lock file found)
+        with pytest.raises(ValueError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=float(1))  # type:ignore
+        assert err.type == ValueError and err.value.args == (
+            "Lock file found. Either a `str` password ot `bytes` key must be provided",
+        )
+
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+
+        assert isinstance(conn, SQLLiteConnection)
+
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=conn.key)
+
+        assert isinstance(conn, SQLLiteConnection)
+
+        key = conn.key
+        lock = test_data_provider.get_lock(user_id=mockuser_id)
+        base_path = test_data_provider._params.base_path / mockuser_id
+        user_lock_path = base_path.joinpath("lock")
+        user_lock_path.write_bytes(EncryptionProdiver(password_or_key=key, init_token=lock).encrypt(b"wrong_user_id"))
+
+        with pytest.raises(DataCorruptionError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=key)
+        assert err.type == DataCorruptionError and err.value.type == DataCorruptionType.INCORRECT_LOCK
+
+        with pytest.raises(IncorrectPasswordKeyError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key="wrong password")
+        assert err.type == IncorrectPasswordKeyError
+
+        # Test data corruption
+        mockuser_id = "corrupt1"
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+
+        # store config and drop lock
+        conn.store_config("test config")
+        test_data_provider._params.base_path.joinpath(mockuser_id, "lock").unlink()
+
+        with pytest.raises(DataCorruptionError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+        assert err.type == DataCorruptionError and err.value.type == DataCorruptionType.CONFIG_NO_LOCK
+
+        mockuser_id = "corrupt2"
+        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+
+        # store log and drop lock
+        conn.append_log("poll", "log")
+        test_data_provider._params.base_path.joinpath(mockuser_id, "lock").unlink()
+
+        with pytest.raises(DataCorruptionError) as err:
+            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
+        assert err.type == DataCorruptionError and err.value.type == DataCorruptionType.DATA_NO_LOCK
 
 
 class TestDataConnection:
@@ -100,65 +174,6 @@ class TestSQLLiteProvider:
         provider.save_lock(user_id=mockuser_id, lock=b"test lock")
         assert provider.get_lock(user_id=mockuser_id) == b"test lock"
 
-    def test_get_connection(self, test_data_provider):
-        mockuser_id = "123"
-        mock_password = "password"
-        mock_key = b"wrong key"
-        assert isinstance(test_data_provider, SQLLiteProvider)
-
-        # Encrypted
-
-        # New user (no lock)
-
-        with pytest.raises(ValueError) as err:
-            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_key)
-        assert err.type == ValueError and err.value.args == (
-            "No lock file for this user. A `str` type password must be provided",
-        )
-
-        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
-        assert isinstance(conn, SQLLiteConnection)
-        assert conn.encrypted is True
-
-        # Known user (lock file found)
-        with pytest.raises(ValueError) as err:
-            conn = test_data_provider.get_connection(user_id=mockuser_id)
-        assert err.type == ValueError and err.value.args == (
-            "Lock file found. Either a `str` password ot `bytes` key must be provided",
-        )
-
-        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
-
-        assert isinstance(conn, SQLLiteConnection)
-        assert conn.encrypted is True
-
-        conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=conn.key)
-
-        assert isinstance(conn, SQLLiteConnection)
-        assert conn.encrypted is True
-
-        assert conn.key
-        key = conn.key
-        lock = test_data_provider.get_lock(user_id=mockuser_id)
-        base_path = test_data_provider._params.base_path / mockuser_id
-        user_lock_path = base_path.joinpath("lock")
-        user_lock_path.write_bytes(EncryptionProdiver(password_or_key=key, init_token=lock).encrypt(b"wrong_user_id"))
-
-        with pytest.raises(ValueError) as err:
-            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=key)
-        assert err.type == ValueError and err.value.args == ("Lock file didn't match this user_id",)
-
-        with pytest.raises(ValueError) as err:
-            conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key="wrong password")
-        assert err.type == ValueError and err.value.args == ("Incorrect password or key",)
-
-        # Not Encrypted
-        mockuser_id = "1234"
-        conn = test_data_provider.get_connection(user_id=mockuser_id)
-
-        assert isinstance(conn, SQLLiteConnection)
-        assert conn.encrypted is False
-
 
 class TestSQLLiteConnection:
     def test_config(self, mockuser, test_data_provider):
@@ -166,7 +181,8 @@ class TestSQLLiteConnection:
         assert isinstance(test_data_provider, SQLLiteProvider)
         mock_password = "password"
 
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser.id, mock_password)
+        conn = test_data_provider.get_connection(mockuser.id, mock_password)
+        assert isinstance(conn, SQLLiteConnection)
 
         config = mockuser.json(exclude_unset=True, ensure_ascii=False)
 
@@ -184,7 +200,8 @@ class TestSQLLiteConnection:
         assert isinstance(test_data_provider, SQLLiteProvider)
         mock_password = "password"
 
-        conn: SQLLiteConnection = test_data_provider.get_connection(mockuser.id, mock_password)
+        conn = test_data_provider.get_connection(mockuser.id, mock_password)
+        assert isinstance(conn, SQLLiteConnection)
 
         poll_code_1 = "poll1"
         poll_code_2 = "poll2"

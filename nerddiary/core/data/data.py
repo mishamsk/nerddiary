@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -15,6 +16,40 @@ from .crypto import EncryptionProdiver
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Tuple, Type
 
 if TYPE_CHECKING:
+    pass
+
+
+class DataCorruptionType(enum.Enum):
+    UNDEFINED = enum.auto()
+    LOCK_WRITE_FAILURE = enum.auto()
+    INCORRECT_LOCK = enum.auto()
+    CONFIG_NO_LOCK = enum.auto()
+    DATA_NO_LOCK = enum.auto()
+
+
+class DataCorruptionError(Exception):
+    def __init__(self, type: DataCorruptionType = DataCorruptionType.UNDEFINED) -> None:
+        self.type = type
+        super().__init__(type)
+
+    def __str__(self) -> str:
+        mes = ""
+        match self.type:
+            case DataCorruptionType.INCORRECT_LOCK:
+                mes = "Lock file didn't match this user_id"
+            case DataCorruptionType.LOCK_WRITE_FAILURE:
+                mes = "Failed to create lock file"
+            case DataCorruptionType.CONFIG_NO_LOCK:
+                mes = "Config exists, but lock file is missing"
+            case DataCorruptionType.DATA_NO_LOCK:
+                mes = "Data exists, but lock file is missing"
+            case _:
+                mes = "Unspecified data corruption"
+
+        return f"Data corrupted: {mes}"
+
+
+class IncorrectPasswordKeyError(Exception):
     pass
 
 
@@ -38,8 +73,47 @@ class DataProvider(ABC):
 
         return all_subclasses(cls)
 
+    def get_connection(self, user_id: str, password_or_key: str | bytes) -> DataConnection:
+        """Creates a data connection for a new or existing user. Checks for correct password/key and data corruption.
+
+        If this is a new user (meaning `check_lock_exist()` returns False) a `str` password must be provided. If a lock file exist, either a password or encryption `key` may be provided (see `DataConnection` property `key`).
+
+        Throws `DataCorruptionError` with the corresponding `DataCorruptionType` if config or data exist but lock file is missing (data corruption), or if lock file corrupted or couldn't be created for any reason.
+
+        Throws `IncorrectPasswordKeyError` if incorrect password or key was provided. Also throws
+        """
+        encr = None
+
+        if not self.check_lock_exist(user_id):
+            if self.check_config_exist(user_id):
+                raise DataCorruptionError(DataCorruptionType.CONFIG_NO_LOCK)
+
+            if self.check_data_exist(user_id):
+                raise DataCorruptionError(DataCorruptionType.DATA_NO_LOCK)
+
+            if not isinstance(password_or_key, str):
+                raise ValueError("No lock file for this user. A `str` type password must be provided")
+
+            encr = EncryptionProdiver(password_or_key)
+            lock = encr.encrypt(user_id.encode())
+            if not self.save_lock(user_id, lock):
+                raise DataCorruptionError(DataCorruptionType.LOCK_WRITE_FAILURE)
+        else:
+            if not isinstance(password_or_key, str) and not isinstance(password_or_key, bytes):
+                raise ValueError("Lock file found. Either a `str` password ot `bytes` key must be provided")
+
+            lock = self.get_lock(user_id)
+            try:
+                encr = EncryptionProdiver(password_or_key, init_token=lock, control_message=user_id.encode())
+            except InvalidToken:
+                raise IncorrectPasswordKeyError()
+            except ValueError:
+                raise DataCorruptionError(DataCorruptionType.INCORRECT_LOCK)
+
+        return self._get_connection(user_id, encr)
+
     @abstractmethod
-    def get_connection(self, user_id: str, password_or_key: str | bytes | None) -> DataConnection:
+    def _get_connection(self, user_id: str, encr: EncryptionProdiver) -> DataConnection:
         pass
 
     @abstractmethod
@@ -102,12 +176,8 @@ class DataConnection(ABC):
         return self._user_id
 
     @property
-    def key(self) -> bytes | None:
-        return self._encryption_provider.key if self._encryption_provider else None
-
-    @property
-    def encrypted(self) -> bool:
-        return self._encryption_provider is not None
+    def key(self) -> bytes:
+        return self._encryption_provider.key
 
     @abstractmethod
     def store_config(self, config: str) -> bool:
@@ -180,35 +250,7 @@ class SQLLiteProvider(DataProvider):
 
         self._params = SQLLiteProviderParams.parse_obj(params)
 
-    def get_connection(self, user_id: str, password_or_key: str | bytes | None = None) -> SQLLiteConnection:
-
-        encr = None
-
-        if not self.check_lock_exist(user_id):
-            if password_or_key is None:
-                return SQLLiteConnection(self, user_id, None)
-
-            if not isinstance(password_or_key, str):
-                raise ValueError("No lock file for this user. A `str` type password must be provided")
-
-            encr = EncryptionProdiver(password_or_key)
-            lock = encr.encrypt(user_id.encode())
-            if not self.save_lock(user_id, lock):
-                raise RuntimeError(f"Unable to save lock file for user_id: <{user_id}>")
-        else:
-            if password_or_key is None or (
-                not isinstance(password_or_key, str) and not isinstance(password_or_key, bytes)
-            ):
-                raise ValueError("Lock file found. Either a `str` password ot `bytes` key must be provided")
-
-            lock = self.get_lock(user_id)
-            try:
-                encr = EncryptionProdiver(password_or_key, init_token=lock, control_message=user_id.encode())
-            except InvalidToken:
-                raise ValueError("Incorrect password or key")
-            except ValueError:
-                raise ValueError("Lock file didn't match this user_id")
-
+    def _get_connection(self, user_id: str, encr: EncryptionProdiver) -> SQLLiteConnection:
         return SQLLiteConnection(self, user_id, encr)
 
     def check_data_exist(self, user_id: str) -> bool:
@@ -309,17 +351,12 @@ class SQLLiteConnection(DataConnection):
         if not config_path.exists():
             return None
         else:
-            if self.encrypted:
-                return self._encryption_provider.decrypt(config_path.read_bytes()).decode()
-            else:
-                return config_path.read_bytes().decode()
+            return self._encryption_provider.decrypt(config_path.read_bytes()).decode()
 
     def append_log(self, poll_code: str, log: str) -> int | None:
         now = datetime.datetime.now()
 
-        log_out = log.encode()
-        if self.encrypted:
-            log_out = self._encryption_provider.encrypt(log_out)
+        log_out = self._encryption_provider.encrypt(log.encode())
 
         stmt = self._data_table.insert(
             values={
@@ -345,18 +382,12 @@ class SQLLiteConnection(DataConnection):
 
             rows = result.all()
             for row in rows:
-                if self.encrypted:
-                    try:
-                        ret.append(
-                            (
-                                row.id,
-                                self._encryption_provider.decrypt(row.log).decode(),
-                            )
-                        )
-                    except Exception:
-                        continue
-                else:
-                    ret.append((row.id, row.log.decode()))
+                ret.append(
+                    (
+                        row.id,
+                        self._encryption_provider.decrypt(row.log).decode(),
+                    )
+                )
 
         return ret
 
@@ -371,9 +402,7 @@ class SQLLiteConnection(DataConnection):
     def update_log(self, id: Any, log: str) -> bool:
         now = datetime.datetime.now()
 
-        log_out = log.encode()
-        if self.encrypted:
-            log_out = self._encryption_provider.encrypt(log_out)
+        log_out = self._encryption_provider.encrypt(log.encode())
 
         stmt = self._data_table.update().where(self._data_table.c.id == id).values(log=log_out, updated_ts=now)
 
