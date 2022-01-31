@@ -8,8 +8,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from ..data.data import DataProvider
 from .config import NerdDiaryConfig
 from .job import Job
-from .session.session import Session
-from .session.string import StringSession
+from .session.session import SessionSpawner, UserSession
+from .session.string import StringSessionSpawner
 
 from typing import Callable, Coroutine, Dict, Type
 
@@ -19,25 +19,31 @@ logger = logging.getLogger(__name__)
 
 
 class NerdDiary:
-    def __init__(self, session: str | Session = "default", config: NerdDiaryConfig = NerdDiaryConfig()) -> None:
+    def __init__(self, session: str | SessionSpawner = "default", config: NerdDiaryConfig = NerdDiaryConfig()) -> None:
         self._config = config
 
+        self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)
+
         if isinstance(session, str):
-            self._session = StringSession(name=session)
+            self._session_spawner = StringSessionSpawner(
+                name=session, params=config.session_spawner_params, data_provider=self._data_provider
+            )
         else:
-            self._session = session
+            self._session_spawner = session
+
+        self._sessions: Dict[str, UserSession]
 
         self._running = False
         self._stop = None
         self._job_queue: asyncio.Queue | None = None
         self._job_dispatcher = None
         self._job_subscribers: Dict[Type[Job], Callable[[Job], Coroutine[None, None, bool]]] = {}
-        self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)
+
         self._scheduler = AsyncIOScheduler()
 
     @property
-    def session(self) -> Session:
-        return self._session
+    def session(self) -> SessionSpawner:
+        return self._session_spawner
 
     async def start(self):
         try:
@@ -47,7 +53,6 @@ class NerdDiary:
 
         self._stop = asyncio.Future()
         self._job_queue = asyncio.Queue()
-        await self._session.create_session()
         self._job_dispatcher = asyncio.create_task(self._dispatch_job())
 
         self._scheduler.start()
@@ -97,7 +102,8 @@ class NerdDiary:
         # Remove all jobs and shutdown the scheduler
         self._scheduler.remove_all_jobs()
         self._scheduler.shutdown()
-        await self._session.close_session()
+        for ses in self._sessions.values():
+            await ses.close()
 
     def stop(self):
         self._running = False
