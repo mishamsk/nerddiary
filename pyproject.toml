@@ -15,7 +15,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Typing :: Stubs Only",
     'Natural Language :: Russian'
-
 ]
 packages = [
     { include = "nerddiary" }
@@ -57,6 +56,15 @@ omit = ["*/test/*", "**/conftest.py"]
 
 [tool.coverage.report]
 omit = ["*/test/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "def __repr__",
+    "if .*DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError"
+    ]
 
 [tool.black]
 line-length = 120
