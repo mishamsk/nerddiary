@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..data.data import DataProvider
@@ -24,9 +25,16 @@ class NerdDiary:
 
         self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)
 
+        self._scheduler = AsyncIOScheduler(jobstores={"default": SQLAlchemyJobStore(url=config.jobstore_sa_url)})
+
+        self._job_queue = asyncio.Queue()
+
         if isinstance(session, str):
             self._session_spawner = StringSessionSpawner(
-                name=session, params=config.session_spawner_params, data_provider=self._data_provider
+                params=config.session_spawner_params,
+                data_provider=self._data_provider,
+                scheduler=self._scheduler,
+                job_queue=self._job_queue,
             )
         else:
             self._session_spawner = session
@@ -34,12 +42,8 @@ class NerdDiary:
         self._sessions: Dict[str, UserSession]
 
         self._running = False
-        self._stop = None
-        self._job_queue: asyncio.Queue | None = None
         self._job_dispatcher = None
         self._job_subscribers: Dict[Type[Job], Callable[[Job], Coroutine[None, None, bool]]] = {}
-
-        self._scheduler = AsyncIOScheduler()
 
     @property
     def session(self) -> SessionSpawner:
@@ -51,8 +55,6 @@ class NerdDiary:
         except RuntimeError:
             raise RuntimeError("Start the loop before starting NerdDiary client")
 
-        self._stop = asyncio.Future()
-        self._job_queue = asyncio.Queue()
         self._job_dispatcher = asyncio.create_task(self._dispatch_job())
 
         self._scheduler.start()
@@ -106,9 +108,8 @@ class NerdDiary:
             await ses.close()
 
     def stop(self):
+        self._scheduler.pause()
         self._running = False
-        if not self._stop.done():
-            self._stop.set_result("stopped")
 
     async def __aenter__(self):
         loop = asyncio.get_event_loop()

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+
+from apscheduler.schedulers.base import BaseScheduler
 from pydantic import BaseModel, DirectoryPath
 
 from ...data.data import DataProvider
@@ -15,13 +18,19 @@ class StringSessionSpawnerParams(BaseModel):
 
 
 class StringSessionSpawner(SessionSpawner):
-    def __init__(self, name: str, params: Dict[str, Any] | None, data_provider: DataProvider) -> None:
-        super().__init__(name, params, data_provider)
+    def __init__(
+        self,
+        params: Dict[str, Any] | None,
+        data_provider: DataProvider,
+        scheduler: BaseScheduler,
+        job_queue: asyncio.Queue,
+    ) -> None:
+        super().__init__(params=params, data_provider=data_provider, scheduler=scheduler, job_queue=job_queue)
 
         self._params = StringSessionSpawnerParams.parse_obj(params)
 
     async def create_session(self, user_id: str) -> UserSession:
-        session_file_path = self._params.base_path.joinpath(self._name, user_id, "session")
+        session_file_path = self._params.base_path.joinpath(user_id, "session")
         session_exists = session_file_path.exists()
         lock_exists = self._data_provoider.check_lock_exist(user_id)
         if session_exists and not lock_exists:
@@ -39,7 +48,7 @@ class StringSessionSpawner(SessionSpawner):
         return session
 
     async def close_session(self, session: UserSession):
-        self._params.base_path.joinpath(self._name, session.user_id).mkdir(parents=True, exist_ok=True)
-        session_file_path = self._params.base_path.joinpath(self._name, session.user_id, "session")
+        self._params.base_path.joinpath(session.user_id).mkdir(parents=True, exist_ok=True)
+        session_file_path = self._params.base_path.joinpath(session.user_id, "session")
 
         session_file_path.write_bytes(session.json(exclude_unset=True).encode())

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import enum
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+from apscheduler.schedulers.base import BaseScheduler
 from pydantic import BaseModel, Field, PrivateAttr
 
 from ...data.data import DataConnection, DataProvider
@@ -44,7 +46,7 @@ class SessionCorruptionType(enum.Enum):
     SESSION_NO_LOCK = enum.auto()
 
 
-class SessionCorruptionError(Exception):  # pragma: no cover
+class SessionCorruptionError(Exception):
     def __init__(self, type: SessionCorruptionType = SessionCorruptionType.UNDEFINED) -> None:
         self.type = type
         super().__init__(type)
@@ -63,19 +65,17 @@ class SessionCorruptionError(Exception):  # pragma: no cover
 class SessionSpawner(ABC):
     def __init__(
         self,
-        name: str,
         params: Dict[str, Any] | None,
         data_provider: DataProvider,
+        scheduler: BaseScheduler,
+        job_queue: asyncio.Queue,
     ) -> None:
         super().__init__()
 
-        self._name = name
         self._data_provoider = data_provider
         self._raw_params = params
-
-    @property
-    def name(self) -> str:
-        return self._name
+        self._scheduler = scheduler
+        self._job_queue = job_queue
 
     @abstractmethod
     async def create_session(self, user_id: str) -> UserSession:

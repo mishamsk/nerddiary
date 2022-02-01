@@ -105,7 +105,7 @@ class UserJob(Job):
 
     # Convenience propoerties
     @property
-    def user_id(self) -> int:
+    def user_id(self) -> str:
         return self._user_session.user_id
 
     def schedule(self, trigger: BaseTrigger):
