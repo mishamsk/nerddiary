@@ -37,6 +37,7 @@ clean-build: ## remove build artifacts
 	find . -name '*.egg-info' -exec rm -fr {} +
 	find . -name '*.egg' -exec rm -f {} +
 	find . -name '.mypy_cache' -exec rm -fr {} +
+	find . -name 'requirements-*.txt' -exec rm -fr {} +
 
 clean-pyc: ## remove Python file artifacts
 	find . -name '*.pyc' -exec rm -f {} +
@@ -111,11 +112,8 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	poetry install --remove-untracked
 
-pip-req-all: ## generate requirements.txt file will all dependencies (dev included)
-	poetry export -f requirements.txt --output requirements-all.txt -E all --dev --without-hashes
+pip-req: ## generate requirements-full.txt file will all dependencies (dev included)
+	poetry export -f requirements.txt --output requirements-full.txt -E full --dev --without-hashes
 
-pip-req-tgbot: ## generate requirements.txt file will tg bot only dependencies (dev excluded)
-	poetry export -f requirements.txt --output requirements-tgbot.txt -E tgbot --without-hashes
-
-pip-req-server: ## generate requirements.txt file will server dependencies (dev excluded)
-	poetry export -f requirements.txt --output requirements-server.txt -E server --without-hashes
+pip-req-ext: ## generate requirements-$(extras).txt file will one of the extras dependencies (dev excluded). Use extras=[client|tgbot|server]
+	poetry export -f requirements.txt --output requirements-$(extras).txt -E $(extras) --without-hashes
