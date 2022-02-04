@@ -25,13 +25,21 @@ exclude = ["nerddiary/**/test/", "nerddiary/**/conftest.py"]
 python = "^3.10"
 click = "^8.0.3"
 pydantic = "^1.9.0"
-SQLAlchemy = "^1.4.29"
-cryptography = "^36.0.1"
-cryptg = "^0.2.post4"
-Pillow = "^9.0.0"
-Telethon = "^1.24.0"
-APScheduler = "^3.8.1"
+SQLAlchemy = { version = "^1.4.29", optional = true }
+cryptography = { version = "^36.0.1", optional = true }
+cryptg = { version = "^0.2.post4", optional = true }
+Pillow = { version = "^9.0.0", optional = true }
+Telethon = { version = "^1.24.0", optional = true }
+APScheduler = { version = "^3.8.1", optional = true }
 pytz = "^2021.3"
+websockets = "^10.1"
+jsonrpcclient = "^4.0.2"
+jsonrpcserver = "^5.0.6"
+
+[tool.poetry.extras]
+tgbot = ["cryptg", "Pillow", "Telethon"]
+server = ["SQLAlchemy", "cryptography", "APScheduler"]
+all = ["cryptg", "Pillow", "Telethon", "SQLAlchemy", "cryptography", "APScheduler"]
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"

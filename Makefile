@@ -110,3 +110,12 @@ dist: clean ## builds source and wheel package
 
 install: clean ## install the package to the active Python's site-packages
 	poetry install --remove-untracked
+
+pip-req-all: ## generate requirements.txt file will all dependencies (dev included)
+	poetry export -f requirements.txt --output requirements-all.txt -E all --dev --without-hashes
+
+pip-req-tgbot: ## generate requirements.txt file will tg bot only dependencies (dev excluded)
+	poetry export -f requirements.txt --output requirements-tgbot.txt -E tgbot --without-hashes
+
+pip-req-server: ## generate requirements.txt file will server dependencies (dev excluded)
+	poetry export -f requirements.txt --output requirements-server.txt -E server --without-hashes

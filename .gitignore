@@ -116,3 +116,5 @@ ENV/
 /data/*
 /testtemp/*
 /devplayground/*
+requirements-tgbot.txt
+requirements-all.txt
