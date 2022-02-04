@@ -7,10 +7,10 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..data.data import DataProvider
-from .config import NerdDiaryConfig
-from .job import Job
-from .session.session import SessionSpawner, UserSession
-from .session.string import StringSessionSpawner
+from ..job.job import Job
+from ..session.session import SessionSpawner, UserSession
+from ..session.string import StringSessionSpawner
+from .config import NerdDiaryServerConfig
 
 from typing import Callable, Coroutine, Dict, Type
 
@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class NerdDiary:
-    def __init__(self, session: str | SessionSpawner = "default", config: NerdDiaryConfig = NerdDiaryConfig()) -> None:
+    def __init__(
+        self, session: str | SessionSpawner = "default", config: NerdDiaryServerConfig = NerdDiaryServerConfig()
+    ) -> None:
         self._config = config
 
         self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)

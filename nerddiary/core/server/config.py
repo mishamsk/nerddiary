@@ -16,7 +16,9 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-class NerdDiaryConfig(BaseSettings):
+class NerdDiaryServerConfig(BaseSettings):
+
+    ws_port: int = Field(default=8880, gt=1, lt=10000, description="WebSocket port")
 
     default_timezone: TimeZone = Field(default=pytz.timezone("US/Eastern"))
 
@@ -57,13 +59,13 @@ class NerdDiaryConfig(BaseSettings):
         env_prefix = "NERDDY_"
 
     @classmethod
-    def load_config(cls, config: str) -> NerdDiaryConfig:
+    def load_config(cls, config: str) -> NerdDiaryServerConfig:
 
-        logger.debug(f"Reading config: {config}")
+        logger.debug(f"Reading server config: {config}")
 
         try:
             return cls.parse_raw(config)
         except ValidationError:
-            logger.error("Not a valid Client config")
+            logger.error("Not a valid NerdDiary Server config")
 
-            raise ValueError(f"Config string <{config}> is not a valid Client config")
+            raise ValueError(f"Config string <{config}> is not a valid NerdDiary Server config")
