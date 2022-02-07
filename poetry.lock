@@ -106,7 +106,7 @@ name = "click"
 version = "8.0.3"
 description = "Composable command line interface toolkit"
 category = "main"
-optional = false
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -678,7 +678,7 @@ standard = ["websockets (>=10.0)", "httptools (>=0.2.0,<0.4.0)", "watchgod (>=0.
 
 [[package]]
 name = "virtualenv"
-version = "20.13.0"
+version = "20.13.1"
 description = "Virtual Python Environment builder"
 category = "dev"
 optional = false
@@ -704,14 +704,14 @@ python-versions = ">=3.7"
 
 [extras]
 client = ["websockets"]
-full = ["SQLAlchemy", "cryptography", "cryptg", "Pillow", "Telethon", "APScheduler", "websockets", "uvicorn", "fastapi"]
-server = ["SQLAlchemy", "cryptography", "APScheduler", "uvicorn", "fastapi"]
-tgbot = ["cryptg", "Pillow", "Telethon", "websockets"]
+full = ["click", "SQLAlchemy", "cryptography", "cryptg", "Pillow", "Telethon", "APScheduler", "websockets", "uvicorn", "fastapi"]
+server = ["click", "SQLAlchemy", "cryptography", "APScheduler", "uvicorn", "fastapi"]
+tgbot = ["click", "cryptg", "Pillow", "Telethon", "websockets"]
 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "6c12d54a8f52b8359e7874b5dd05d2e85633aebf315d008fb17b287c21fb7a48"
+content-hash = "f13ee0defab73c64be99c5d30488e3859d0d0c9395c348a6c35146a65b71e4b7"
 
 [metadata.files]
 anyio = [
@@ -1288,8 +1288,8 @@ uvicorn = [
     {file = "uvicorn-0.17.4.tar.gz", hash = "sha256:25850bbc86195a71a6477b3e4b3b7b4c861fb687fb96912972ce5324472b1011"},
 ]
 virtualenv = [
-    {file = "virtualenv-20.13.0-py2.py3-none-any.whl", hash = "sha256:339f16c4a86b44240ba7223d0f93a7887c3ca04b5f9c8129da7958447d079b09"},
-    {file = "virtualenv-20.13.0.tar.gz", hash = "sha256:d8458cf8d59d0ea495ad9b34c2599487f8a7772d796f9910858376d1600dd2dd"},
+    {file = "virtualenv-20.13.1-py2.py3-none-any.whl", hash = "sha256:45e1d053cad4cd453181ae877c4ffc053546ae99e7dd049b9ff1d9be7491abf7"},
+    {file = "virtualenv-20.13.1.tar.gz", hash = "sha256:e0621bcbf4160e4e1030f05065c8834b4e93f4fcc223255db2a823440aca9c14"},
 ]
 websockets = [
     {file = "websockets-10.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:38db6e2163b021642d0a43200ee2dec8f4980bdbda96db54fde72b283b54cbfc"},

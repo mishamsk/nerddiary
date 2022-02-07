@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.create false --local
-          poetry install
+          poetry install -E full
       - name: Isort
         run: |
           isort --filter-files .
