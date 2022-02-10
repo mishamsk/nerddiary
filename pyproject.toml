@@ -23,7 +23,7 @@ exclude = ["nerddiary/**/test/", "nerddiary/**/conftest.py"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-pydantic = "^1.9.0"
+pydantic = {extras = ["dotenv"], version = "^1.9.0"}
 pytz = "^2021.3"
 jsonrpcclient = "^4.0.2"
 jsonrpcserver = "^5.0.6"

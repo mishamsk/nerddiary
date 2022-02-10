@@ -21,6 +21,8 @@ class NerdDiaryClientConfig(BaseSettings):
         title = "NerdDiary Configuration Model"
         extra = "forbid"
         env_prefix = "NERDDY_"
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
     @classmethod
     def load_config(cls, config: str) -> NerdDiaryClientConfig:
