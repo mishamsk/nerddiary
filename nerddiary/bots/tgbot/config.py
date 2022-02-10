@@ -1,89 +1,64 @@
 from __future__ import annotations
 
-import datetime
-import json
 import logging
 
-from nerddiary.bot.data import DataProvider
-from nerddiary.bot.model import QuestionType, TimeZone, User
-
-from pydantic import BaseSettings, DirectoryPath, PrivateAttr, ValidationError, validator
-from pydantic.fields import Field
+from pydantic import AnyUrl, BaseSettings, Field, SecretStr, validator
 
 from typing import Any, ClassVar, Dict, List, Optional
 
-logger = logging.getLogger("nerddiary.bot.config")
+logger = logging.getLogger("nerddiary.tgbot.config")
 
 
-class BotConfig(BaseSettings):
+class TGBotConfig(BaseSettings):
     _config_file_path: ClassVar[str] = ""
-    bot_debug: bool = False
-    admins: List[int] = []
-    user_conf_path: DirectoryPath
-    default_timezone: TimeZone
-    question_types: Optional[Dict[str, QuestionType]]
-    default_user: Optional[User]
-    _data_provider: DataProvider = PrivateAttr()
-    data_provider_name: str = Field(default="sqllite", description="Data provider to use to srote poll answers")
-    """ Data provider to use to srote poll answers """
+    API_ID: SecretStr = Field(..., exclude=True)
+    API_HASH: SecretStr = Field(..., exclude=True)
+    BOT_TOKEN: SecretStr = Field(..., exclude=True)
+    BOT_DEBUG: bool = False
+    SESSION_NAME: str = "Default"
+    TEST_SERVER: AnyUrl | None = None
+    TEST_MODE: bool = False
+    TEST_PHONE: str = Field(default="9996628576", regex=r"^99966\d{5}$")
+    admins: List[int] = Field(min_items=1)
+    allowed_users: Optional[List[int]] = Field(min_items=1)
 
-    data_provider_params: Dict[str, Any] | None = {"base_path": "data"}
-    reminder_time: Optional[datetime.time] = Field(description="Poll auto-reminder time in user local time zone")
-    """ Poll auto-reminder time in user local time zone """
-    conversation_timeout: Optional[datetime.timedelta] = Field(
-        default=datetime.timedelta(minutes=5),
-        description="Timeout for conversation expressed in timedelta (see https://pydantic-docs.helpmanual.io/usage/types/#datetime-types for supported formats)",
-    )
-    """ Timeout for conversation expressed in timedelta (see https://pydantic-docs.helpmanual.io/usage/types/#datetime-types for supported formats) """
-
-    @validator("data_provider_name")
-    def data_provider_must_be_supported(cls, v):
-        if v not in DataProvider.supported_providers:
-            raise ValueError(f"Data provider <{v}> is not supported")
+    @validator("TEST_MODE")
+    def test_server_must_be_defined(cls, v, values: Dict[str, Any]):
+        if v and values.get("TEST_SERVER") is None:
+            raise ValueError("Test server address must be provided when test mode is enabled")
 
         return v
 
-    def __init__(self, **data) -> None:
-        super().__init__(**data)
+    @validator("TEST_SERVER")
+    def test_server_port_must_be_correct(cls, v: AnyUrl):
+        if v.port != "80" and v.port != "443":
+            raise ValueError(f"Unexpected test server port {v.port=}. Expecting 80 or 443")
 
-        self._data_provider = DataProvider.get_data_provider(self.data_provider_name, self.data_provider_params)
+        return v
+
+    @validator("TEST_SERVER")
+    def test_server_host_must_be_ip(cls, v: AnyUrl):
+        if not v.host_type == "ipv4":
+            raise ValueError(f"Unexpected test server host {v.host_type=}. Expecting ipv4 address")
+
+        return v
 
     class Config:
-        title = "Bot Configuration"
+        title = "NerdDiary Telegram Bot Configuration"
         extra = "forbid"
-        env_prefix = "NERDDIARY_"
+        env_prefix = "NERDDY_TGBOT_"
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
     @classmethod
-    def load_config(cls, config_file_path: str | None = None) -> BotConfig:
+    def load_config(cls, config_file_path: str | None = None) -> TGBotConfig:
         if config_file_path:
             cls._config_file_path = config_file_path
 
         logger.debug(f"Reading config file at: {cls._config_file_path}")
 
-        bot_config_raw = ""
-
         try:
-            with open(cls._config_file_path) as json_data_file:
-                config_raw = json.load(json_data_file)
-                bot_config_raw = config_raw.get("bot", None)
-
-                if not bot_config_raw:
-                    raise ValueError("Invalid configuration file. 'Bot' key is missing")
-
+            return cls.parse_file(cls._config_file_path)
         except OSError:
             logger.error(f"File at '{cls._config_file_path}' doesn't exist or can't be open")
-
             raise ValueError(f"File at '{cls._config_file_path}' doesn't exist or can't be open")
-
-        return cls.parse_obj(bot_config_raw)
-
-
-if __name__ == "__main__":
-    try:
-        conf = BotConfig.load_config("./testdata/bot_config_test.json")
-    except ValidationError as e:
-        print(e)
-        exit(0)
-
-    print(conf)
-    # print(BotConfig.schema_json(indent=2))
