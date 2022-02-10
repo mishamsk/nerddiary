@@ -67,17 +67,23 @@ class MockSlowAsyncApp(AsyncApplication):
         self._logger.info("_astart")
         print("_astart")
         await asyncio.sleep(self._slow_start)
+        self._logger.info("_astart_done")
+        print("_astart_done")
 
     async def _aclose(self) -> bool:
         self._logger.info("_aclose")
         print("_aclose")
         await asyncio.sleep(self._slow_close)
+        self._logger.info("_aclose_done")
+        print("_aclose_done")
         return True
 
     async def _arun(self) -> str:
         self._logger.info("_arun")
         print("_arun")
         await asyncio.sleep(self._slow_run)
+        self._logger.info("_arun_done")
+        print("_arun_done")
         return "runned"
 
 
@@ -131,9 +137,10 @@ def test_start_interrupt(interrupt_with_sigal):
     log_lines = out.splitlines()
     assert (
         exitcode == 1
-        and len(log_lines) == 2
+        and len(log_lines) == 3
         and log_lines[0] == "_astart"
         and log_lines[1] == "_aclose"
+        and log_lines[2] == "_aclose_done"
         and err.endswith("KeyboardInterrupt\n")
     )
 
@@ -143,6 +150,24 @@ def test_close_no_interrupt():
     assert not ma.closed
     ma.close()
     assert ma.closed
+
+
+def run_close_interrupt():
+    ma = MockSlowAsyncApp(slow_start=0, slow_close=2).start()
+    ma.close()
+
+
+def test_close_interrupt(interrupt_with_sigal):
+    exitcode, out, err = interrupt_with_sigal(run_start_interrupt, 0.5, signal.SIGINT)
+    log_lines = out.splitlines()
+    assert (
+        exitcode == 1
+        and len(log_lines) == 3
+        and log_lines[0] == "_astart"
+        and log_lines[1] == "_aclose"
+        and log_lines[2] == "_aclose_done"
+        and err.endswith("KeyboardInterrupt\n")
+    )
 
 
 def test_run_no_interrupt(test_logger):

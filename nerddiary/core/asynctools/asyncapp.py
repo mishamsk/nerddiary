@@ -128,7 +128,12 @@ class AsyncApplication(abc.ABC):
 
         self._logger.debug("Running <_aclose> method, shielding it from SIGINT and cancellation")
 
+        hit_sigint = False
+
         def __handler(sig, frame):
+            nonlocal hit_sigint
+            hit_sigint = True
+
             self._logger.debug("SIGINT received while runnning <_aclose>; delaying")
 
         old_sigint_handler = None
@@ -138,9 +143,16 @@ class AsyncApplication(abc.ABC):
             old_sigint_handler = signal.signal(signal.SIGINT, __handler)
 
             res = await asyncio.shield(self._aclose())
+
+            if hit_sigint:
+                self._logger.debug("aclose: Restoring SIGINT handler and re-rasing SIGINT")
+                signal.signal(signal.SIGINT, old_sigint_handler)
+                raise KeyboardInterrupt()
+
         finally:
-            self._logger.debug("aclose: Restoring SIGINT handler")
-            signal.signal(signal.SIGINT, old_sigint_handler)
+            if not hit_sigint:
+                self._logger.debug("aclose: Restoring SIGINT handler")
+                signal.signal(signal.SIGINT, old_sigint_handler)
 
         if res is True:
             self._closed = True
