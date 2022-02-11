@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from nerddiary.bots.tgbot.config import TGBotConfig
+from nerddiary.bots.tgbot.config import NerdDiaryTGBotConfig
 
 import pytest
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 
-def test_corect_load(monkeypatch: MonkeyPatch, tmp_path: Path):
+def test_corect_load(monkeypatch: MonkeyPatch, tmp_path: Path, remove_env):
     env_file = tmp_path / ".env"
     monkeypatch.chdir(tmp_path)
     env_file.write_text(
@@ -16,53 +16,45 @@ def test_corect_load(monkeypatch: MonkeyPatch, tmp_path: Path):
         NERDDY_TGBOT_API_HASH='api_hash_test'
         NERDDY_TGBOT_BOT_TOKEN='bot_token_test'
         NERDDY_TGBOT_BOT_DEBUG=True
-        NERDDY_TGBOT_TEST_MODE=True
-        NERDDY_TGBOT_TEST_SERVER='https://149.154.167.40:443'
+        NERDDY_TGBOT_SERVER='https://149.154.167.40:443'
         NERDDY_TGBOT_SESSION_NAME='test_name'
-        NERDDY_TGBOT_TEST_PHONE='9996621234'
         NERDDY_TGBOT_admins='["123"]'
         NERDDY_TGBOT_allowed_users='["234","567"]'
         """
     )
 
-    conf = TGBotConfig()  # type:ignore
+    conf = NerdDiaryTGBotConfig()  # type:ignore
     assert conf.API_ID.get_secret_value() == "api_id_test"
     assert conf.API_HASH.get_secret_value() == "api_hash_test"
     assert conf.BOT_TOKEN.get_secret_value() == "bot_token_test"
     assert conf.BOT_DEBUG is True
     assert conf.SESSION_NAME == "test_name"
-    assert conf.TEST_SERVER.host == "149.154.167.40" and conf.TEST_SERVER.port == "443"
-    assert conf.TEST_MODE is True
-    assert conf.TEST_PHONE == "9996621234"
+    assert conf.SERVER.host == "149.154.167.40" and conf.SERVER.port == "443"
     assert conf.admins == [123]
     assert conf.allowed_users == [234, 567]
 
 
-def test_validations(monkeypatch: MonkeyPatch, tmp_path: Path):
+def test_validations(monkeypatch: MonkeyPatch, tmp_path: Path, remove_env):
     env_file = tmp_path / ".env"
     monkeypatch.chdir(tmp_path)
 
-    # Missing tokerns, Incorrect server host & port + test_mode True without correct server, empty allowed_users, no admins, incorrect test_phone format
+    # Missing tokens, Incorrect server host & port, empty allowed_users, no admins
     env_file.write_text(
         """
-        NERDDY_TGBOT_TEST_MODE=True
-        NERDDY_TGBOT_TEST_SERVER='https://127.0.0.1:1020'
-        NERDDY_TGBOT_TEST_PHONE='+19996621234'
+        NERDDY_TGBOT_SERVER='https://127.0.0.1:1020'
         NERDDY_TGBOT_allowed_users='[]'
         """
     )
 
     with pytest.raises(ValidationError) as err:
-        TGBotConfig()  # type:ignore
+        NerdDiaryTGBotConfig()  # type:ignore
     assert err.type == ValidationError
 
     must_error = {
         "API_ID",
         "API_HASH",
         "BOT_TOKEN",
-        "TEST_SERVER",
-        "TEST_MODE",
-        "TEST_PHONE",
+        "SERVER",
         "admins",
         "allowed_users",
     }
@@ -77,20 +69,11 @@ def test_validations(monkeypatch: MonkeyPatch, tmp_path: Path):
             case ("BOT_TOKEN",) as mtch:
                 assert v_err["type"] == "value_error.missing"
                 must_error.remove(mtch[0])
-            case ("TEST_SERVER",) as mtch:
+            case ("SERVER",) as mtch:
                 assert (
                     v_err["type"] == "value_error"
-                    and v_err["msg"] == "Unexpected test server port v.port='1020'. Expecting 80 or 443"
+                    and v_err["msg"] == "Unexpected server port v.port='1020'. Expecting 80 or 443"
                 )
-                must_error.remove(mtch[0])
-            case ("TEST_MODE",) as mtch:
-                assert (
-                    v_err["type"] == "value_error"
-                    and v_err["msg"] == "Test server address must be provided when test mode is enabled"
-                )
-                must_error.remove(mtch[0])
-            case ("TEST_PHONE",) as mtch:
-                assert v_err["type"] == "value_error.str.regex"
                 must_error.remove(mtch[0])
             case ("admins",) as mtch:
                 assert v_err["type"] == "value_error.missing"
