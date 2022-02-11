@@ -1,15 +1,8 @@
 import pytest
 
-from .data.crypto import EncryptionProdiver
 from .data.data import DataProvider
 from .poll.poll import Poll
 from .user.user import User
-
-
-def pytest_collection_modifyitems(items):
-    for item in items:
-        if "performance" in item.nodeid:
-            item.add_marker(pytest.mark.performance)
 
 
 @pytest.fixture(scope="class")
@@ -20,11 +13,6 @@ def test_data_path(tmp_path_factory):
 @pytest.fixture(scope="class")
 def test_data_provider(test_data_path):
     return DataProvider.get_data_provider("sqllite", {"base_path": str(test_data_path)})
-
-
-@pytest.fixture(scope="class")
-def test_encryption_provider():
-    return EncryptionProdiver("test passwrod")
 
 
 @pytest.fixture(scope="class")
@@ -123,31 +111,5 @@ def mockuser(mockpoll):
 
 
 @pytest.fixture(scope="class")
-def test_data_connection(mockuser, test_data_provider, test_encryption_provider):
-    return test_data_provider.get_connection(mockuser.id, test_encryption_provider)
-
-
-@pytest.fixture
-def interrupt_with_sigal(capfd):
-    import signal
-
-    def _interrupt_with_sigal(func, run_time: int, signal: signal.Signals = signal.SIGINT, *args, **kwargs):
-        from multiprocessing import Process
-        from os import kill
-        from time import sleep
-
-        p = Process(target=func, args=args, kwargs=kwargs)
-        p.start()
-        sleep(run_time)
-        if p.pid:
-            kill(p.pid, signal)
-        else:
-            raise RuntimeError("Failed to run the process")
-
-        while p.is_alive():
-            sleep(0.1)
-
-        captured = capfd.readouterr()
-        return (p.exitcode, captured.out, captured.err)
-
-    return _interrupt_with_sigal
+def test_data_connection(mockuser, test_data_provider: DataProvider):
+    return test_data_provider.get_connection(mockuser.id, "test password")
