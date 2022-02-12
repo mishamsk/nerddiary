@@ -110,7 +110,7 @@ try:
             click.echo(click.style("Starting the server!", fg="green"))
 
         try:
-            uvicorn.run("nerddiary.core.server.main:app", host="127.0.0.1", reload=False, port=port)
+            uvicorn.run("nerddiary.core.server.main:app", host="127.0.0.1", reload=True, port=port)
         except KeyboardInterrupt:
             pass
         finally:
