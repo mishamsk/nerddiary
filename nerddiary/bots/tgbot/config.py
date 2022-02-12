@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import AnyUrl, BaseSettings, Field, SecretStr, validator
+from pydantic import AnyUrl, BaseSettings, DirectoryPath, Field, SecretStr, validator
 
-from typing import ClassVar, Generator, List, Optional
+from typing import List, Optional
 
 logger = logging.getLogger("nerddiary.tgbot.config")
 
 
 class NerdDiaryTGBotConfig(BaseSettings):
-    _config_file_path: ClassVar[str] = ""
     API_ID: SecretStr = Field(..., exclude=True)
     API_HASH: SecretStr = Field(..., exclude=True)
     BOT_TOKEN: SecretStr = Field(..., exclude=True)
     BOT_DEBUG: bool = Field(default=False, exclude=True)
-    SESSION_NAME: str = Field(default="nerddy", exclude=True)
-    SERVER: AnyUrl | None = Field(default=None, exclude=True)
-    admins: List[int] = Field(min_items=1)
-    allowed_users: Optional[List[int]] = Field(min_items=1)
+    SESSION_NAME: str = Field(default="nerddy")
+    SESSION_PATH: DirectoryPath = Field(default="./")
+    SERVER: AnyUrl | None = Field(default=None)
+    ADMINS: List[int] = Field(min_items=1)
+    ALLOWED_USERS: Optional[List[int]] = Field(min_items=1)
 
     @validator("SERVER")
     def server_port_must_be_correct(cls, v: AnyUrl):
@@ -40,23 +40,3 @@ class NerdDiaryTGBotConfig(BaseSettings):
         env_prefix = "NERDDY_TGBOT_"
         env_file = ".env"
         env_file_encoding = "utf-8"
-
-    @classmethod
-    def load_config(cls, config_file_path: str | None = None) -> Generator[NerdDiaryTGBotConfig, None, None]:
-        if config_file_path:
-            cls._config_file_path = config_file_path
-
-        logger.debug(f"Reading config file at: {cls._config_file_path}")
-
-        conf = None
-
-        try:
-            conf = cls.parse_file(cls._config_file_path)
-            yield conf
-        except OSError:
-            logger.error(f"File at '{cls._config_file_path}' doesn't exist or can't be open")
-            raise ValueError(f"File at '{cls._config_file_path}' doesn't exist or can't be open")
-        finally:
-            if conf:
-                with open(cls._config_file_path, mode="w+") as f:
-                    f.write(conf.json())
