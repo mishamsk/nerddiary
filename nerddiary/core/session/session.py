@@ -10,14 +10,14 @@ from datetime import datetime
 from apscheduler.schedulers.base import BaseScheduler
 from pydantic import BaseModel, Field, PrivateAttr
 
-from ...data.data import DataConnection, DataProvider
-from ...poll.workflow import PollWorkflow
-from ...user.user import User
+from ..data.data import DataConnection, DataProvider
+from ..poll.workflow import PollWorkflow
+from ..user.user import User
 
 from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
-    from ..job import UserJob
+    from ..job.job import UserJob
 
 
 class UserSessionStatus(enum.IntFlag):

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class NerdDiaryClientConfig(BaseSettings):
     server_uri: stricturl(tld_required=False, allowed_schemes={"ws"}) = Field(  # type:ignore # noqa:F821
-        default="ws://localhost:8880"
+        default="ws://localhost:8880/api/v1/ws/"
     )
 
     reconnect_timeout: int = Field(default=15, gt=1, lt=3600, description="Timeout for connection retries")

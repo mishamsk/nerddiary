@@ -18,3 +18,5 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
     async def start(event: custom.Message):
         logger.debug(f"Recieved event <{str(event)}>. Processing")
         await event.respond(START_NEW_USER_WELCOME, reply_to=event.reply_to_msg_id)
+        res = await bot.ndc.test_api_call()
+        await event.respond(res)

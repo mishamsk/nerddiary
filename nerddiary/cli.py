@@ -87,5 +87,37 @@ try:
 except ImportError:
     logger.debug("TG Bot module doesn't exist. Skipping")
 
+try:
+    # TODO: make a better detection mechanism
+    from fastapi import APIRouter  # noqa:F401
+
+    logger.debug("Found TG Server module. Creating Bot CLI")
+    import uvicorn
+
+    @cli.command()
+    @click.pass_context
+    @click.option(
+        "-p",
+        "--port",
+        help="Port to run the server on",
+        default=80,
+    )
+    def server(ctx: click.Context, port: int) -> None:
+
+        interactive = ctx.parent.params["interactive"]  # type: ignore
+
+        if interactive:
+            click.echo(click.style("Starting the server!", fg="green"))
+
+        try:
+            uvicorn.run("nerddiary.core.server.main:app", host="127.0.0.1", reload=False, port=port)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            logger.info("Server was stopped")
+
+except ImportError:
+    logger.debug("TG Bot module doesn't exist. Skipping")
+
 if __name__ == "__main__":
     cli(auto_envvar_prefix="NERDDY")

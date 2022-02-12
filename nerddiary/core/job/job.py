@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import datetime
 import logging
@@ -13,7 +15,7 @@ if TYPE_CHECKING:
     from apscheduler.job import Job as APJob
 
     from ..poll.workflow import PollWorkflow
-    from .session.session import UserSession
+    from ..session.session import UserSession
 
 logger = logging.getLogger(__name__)
 

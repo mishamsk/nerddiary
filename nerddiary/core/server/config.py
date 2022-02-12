@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 class NerdDiaryServerConfig(BaseSettings):
 
-    ws_port: int = Field(default=8880, gt=1, lt=10000, description="WebSocket port")
-
     default_timezone: TimeZone = Field(default=pytz.timezone("US/Eastern"))
 
     default_user: Optional[User] = Field(

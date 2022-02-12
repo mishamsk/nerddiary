@@ -1,16 +1,29 @@
 version: '3.7'
 services:
-    nerddiary:
-        build:
-            context: ./
-            args:
-                NERDDIARY_VERSION: ${NERDDIARY_VERSION}
-            dockerfile: Dockerfile
-        tty: true
-        container_name: nerddiary
-        command: nerddiary --log-file /app/log/nerddiary.log bot -tt ${NERDDIARY_BOT_TOKEN}
-        volumes:
-            - ./log:/app/log
-        environment:
-            - MIGREZYLER_BOT_TOKEN=${NERDDIARY_BOT_TOKEN}
-        restart: unless-stopped
+  server:
+    build:
+      context: ./../
+      args:
+        extras: server
+      dockerfile: ./docker/Dockerfile
+    tty: true
+    container_name: nerddiary-server
+    command: nerddiary --log-level DEBUG --log-file /app/log/server.log server -p 80
+    volumes:
+      - ./../:/app/log
+    ports:
+      - 8880:80
+
+  tgbot:
+    build:
+      context: ./../
+      args:
+        extras: tgbot
+      dockerfile: ./docker/Dockerfile
+    tty: true
+    container_name: nerddiary-tgbot
+    command: nerddiary --log-level DEBUG --log-file /app/log/tgbot.log bot
+    volumes:
+      - ./../:/app/log
+    depends_on:
+      - server

@@ -5,6 +5,7 @@ from telethon import TelegramClient
 from telethon.tl.types import User
 
 from ...core.asynctools.asyncapp import AsyncApplication
+from ...core.client.client import NerdDiaryClient
 
 # TODO: Change to relative import
 from . import handlers
@@ -29,6 +30,7 @@ class NerdDiaryTGBot(AsyncApplication):
             config.API_HASH.get_secret_value(),
         )
         self._bot = bot
+        self._ndc = NerdDiaryClient()
         self._me = None
 
     @property
@@ -40,21 +42,27 @@ class NerdDiaryTGBot(AsyncApplication):
         return self._bot
 
     @property
+    def ndc(self) -> NerdDiaryClient:
+        return self._ndc
+
+    @property
     def me(self) -> User | None:
         return self._me  # type: ignore
 
     async def _astart(self):
         logger.debug("Starting NerdDiary TG Bot")
+        await self._ndc.astart()
         await self._bot.start(bot_token=self._bot_config.BOT_TOKEN.get_secret_value())  # type:ignore
         await handlers.init(bot=self, root_logger=logger)
         self._me = await self._bot.get_me()
 
     async def _aclose(self) -> bool:
         logger.debug("Closing NerdDiary TG Bot")
+        res = await self._ndc.aclose()
         coro = self._bot.disconnect()
         if coro:
             await coro
-            return True
+            return res
         else:
             return False
 

@@ -6,29 +6,19 @@ import logging
 import uuid
 from contextlib import suppress
 
-from nerddiary.core.asynctools.asyncapp import AsyncApplication
-
-# TODO: change to relative import
-from nerddiary.core.client.config import NerdDiaryClientConfig
-
 from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse
 from jsonrpcserver import Result, Success, async_dispatch, method
 from websockets import client
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
+from ..asynctools.asyncapp import AsyncApplication
+from ..asynctools.asyncresult import AsyncResult
+from ..client.config import NerdDiaryClientConfig
+
 import typing as t
 
 logger = logging.getLogger(__name__)
-
-
-class AsyncResult:
-    def __init__(self, id: uuid.UUID) -> None:
-        self._id = id
-        self._fut = asyncio.Future()
-
-    async def get(self) -> t.Any:
-        return await self._fut
 
 
 class NerdDiaryClient(AsyncApplication):
@@ -37,6 +27,7 @@ class NerdDiaryClient(AsyncApplication):
     ) -> None:
         super().__init__(loop=loop, logger=logger)
 
+        self._id = uuid.uuid4()
         self._config = config
         self._running = False
         self._connect_lock = asyncio.Lock()
@@ -81,7 +72,7 @@ class NerdDiaryClient(AsyncApplication):
                     f"Trying to connect to NerdDiary server at <{self._config.server_uri}>, try #{str(retry+1)}"
                 )
                 try:
-                    self._ws = await client.connect(self._config.server_uri)
+                    self._ws = await client.connect(self._config.server_uri + str(self._id))
                 except TimeoutError:
                     await asyncio.sleep(self._config.reconnect_timeout)
                     retry += 1
@@ -178,21 +169,5 @@ class NerdDiaryClient(AsyncApplication):
         print("Ndc ws called from the server with param: " + str(p))
         return Success("pong " + str(p))
 
-
-if __name__ == "__main__":
-    import sys
-    from time import sleep
-
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler(stream=sys.stdout))
-
-    with NerdDiaryClient() as ndc:
-        for i in range(10):
-            try:
-                print(ndc.loop.run_until_complete(ndc.run_rpc("ping", params={"p": str(i)})))
-            except RuntimeError as e:
-                print(str(e))
-            except ConnectionError as e:
-                print(str(e))
-                break
-            sleep(1)
+    async def test_api_call(self):
+        return await self.run_rpc("ping", {"p": "test"})
