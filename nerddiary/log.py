@@ -19,14 +19,15 @@ LOG_FORMATS = {
 }
 
 
-def configure_logger(log_level: str = "INFO", log_file: str | None = None) -> logging.Logger:
+def configure_logger(name: str, log_level: str = "INFO", log_file: str | None = None) -> logging.Logger:
     """Configure logging
 
     Set up logging to stdout with ``log_level``. If ``log_file`` is given use it instead.
     """
     # Set up 'cookiecutter' logger
-    logger = logging.getLogger("nerddiary")
-    logger.setLevel(logging.DEBUG)
+    logger = logging.getLogger(name)
+    asyncio_logger = logging.getLogger("asyncio")
+    logger.setLevel(LOG_LEVELS[log_level])
 
     handler: logging.Handler = logging.StreamHandler(stream=sys.stdout)
     # Create a file handler if a log file is provided
@@ -37,5 +38,6 @@ def configure_logger(log_level: str = "INFO", log_file: str | None = None) -> lo
     handler.setLevel(LOG_LEVELS[log_level])
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    asyncio_logger.addHandler(handler)
 
     return logger
