@@ -51,6 +51,7 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 	rm -fr testtemp/
 	find . -name '*.log' -d 1 -exec rm -f {} +
+	find . -name '*.session' -d 1 -exec rm -f {} +
 
 lint: ## check style with flake8
 	flake8 $(sources)
