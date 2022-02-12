@@ -4,10 +4,11 @@ import os
 import sys
 
 from nerddiary import __version__
-from nerddiary.bots.tgbot.bot import main as bot_entry
 from nerddiary.log import configure_logger
 
 import click
+
+logger = logging.getLogger("nerddiary")
 
 
 def version_msg() -> str:
@@ -58,52 +59,33 @@ def cli(
 ) -> None:
     """Main entry point"""
 
-    logger = configure_logger(log_level=log_level if not verbose else "DEBUG", log_file=log_file)
+    logger = configure_logger("nerddiary", log_level=log_level if not verbose else "DEBUG", log_file=log_file)
+    logger.debug("Init cli succesful")
 
-    logger.debug("Init cli. Succesful connection to G SHeet API")
 
+try:
+    from nerddiary.bots.tgbot.bot import NerdDiaryTGBot
 
-@cli.command()
-@click.pass_context
-@click.option("--token", "-tt", help="Telegram BOT token")
-def bot(ctx: click.Context, token: str) -> None:
+    logger.debug("Found TG Bot module. Creating Bot CLI")
 
-    logger = logging.getLogger("nerddiary.bot")
-    interactive = ctx.parent.params["interactive"]  # type: ignore
-    config_file = ctx.parent.params["config_file"]
+    @cli.command()
+    @click.pass_context
+    def bot(ctx: click.Context) -> None:
 
-    if not config_file:
-        if interactive:
-            click.echo("Please provide a valid config file")
-        sys.exit(1)
-
-    # LOAD TOKEN
-    if not token:
-        logger.error("Bot Token must be set in NERDDIARY_BOT_TOKEN environment var or provided via -tt option")
+        interactive = ctx.parent.params["interactive"]  # type: ignore
 
         if interactive:
-            click.echo(
-                click.style(
-                    "Bot Token must be set in NERDDIARY_BOT_TOKEN environment var or provided via -tt option",
-                    fg="red",
-                )
-            )
+            click.echo(click.style("Starting the bot!", fg="green"))
 
-        sys.exit(1)
+        try:
+            NerdDiaryTGBot().run()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            logger.info("Bot was stopped")
 
-    if interactive:
-        click.echo(click.style("Starting the bot!", fg="green"))
-
-    api_wrapper = ctx.obj
-
-    bot_entry(
-        config_file=config_file,
-        gsheet_api_wrapper=api_wrapper,
-        bot_token=token,
-    )
-
-    logger.info("Bot stopping")
-
+except ImportError:
+    logger.debug("TG Bot module doesn't exist. Skipping")
 
 if __name__ == "__main__":
-    cli(auto_envvar_prefix="NERDDIARY")
+    cli(auto_envvar_prefix="NERDDY")
