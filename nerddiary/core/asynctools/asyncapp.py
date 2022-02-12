@@ -6,7 +6,7 @@ import logging
 import signal
 from time import sleep
 
-from typing import Any, Awaitable, TypeVar
+from typing import Any, Coroutine, TypeVar
 
 # from .delayedsignal import DelayedKeyboardInterrupt
 
@@ -212,58 +212,7 @@ class AsyncApplication(abc.ABC):
                     }
                 )
 
-    async def _async_sigint_shield(
-        self, func: Awaitable[_T], *, ensure_func_run: bool = False, close: bool = True
-    ) -> _T | None:
-        self._logger.debug(f"Running a sigint shielded class method {func}. {ensure_func_run=};{close=}")
-
-        func_task: asyncio.Task | None = None
-        hit_sigint = False
-
-        def __handler(sig, frame):
-            nonlocal hit_sigint
-            hit_sigint = True
-
-            if ensure_func_run:
-                self._logger.debug("SIGINT received while runnning a shielded method; delaying")
-            else:
-                self._logger.debug("SIGINT received while runnning a shielded method; cancelling {func} immediately")
-                if func_task:
-                    func_task.cancel()
-
-        self._logger.debug("Entering DelayedKeyboardInterrupt context")
-        old_sigint_handler = signal.signal(signal.SIGINT, __handler)
-        try:
-            func_task = self.loop.create_task(func)
-            return await func_task
-        except asyncio.CancelledError:
-            res = True
-
-            if close:
-                self._logger.warn("{func} was cancelled. Closing app")
-                res = await self.aclose()
-
-            if not res:
-                raise
-
-            return None
-        finally:
-            self._logger.debug("Exiting DelayedKeyboardInterrupt context. Restoring signal handlers")
-            signal.signal(signal.SIGINT, old_sigint_handler)
-
-            if hit_sigint:
-                res = True
-
-                if close:
-                    self._logger.warn("Closing app after a delayed SIGINT")
-                    res = await self.aclose()
-
-                if not res:
-                    raise
-
-                return None
-
-    def _run_coro(self, coro: Awaitable[_T]) -> _T:
+    def _run_coro(self, coro: Coroutine[Any, Any, _T]) -> _T:
         loop = self.loop
 
         if loop.is_running():
