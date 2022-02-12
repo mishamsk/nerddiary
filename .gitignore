@@ -112,8 +112,17 @@ ENV/
 # IDE settings
 .vscode/
 .idea/
+
+# Test stuff
 /testdata/*
 /data/*
 /testtemp/*
+
+# Dev playgroud
 /devplayground/*
+
+# Auto generated pip files
 /requirements*.txt
+
+# Telethon sessions
+*.session
