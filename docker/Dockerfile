@@ -4,7 +4,9 @@ ARG extras=full
 RUN mkdir /app
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock .env README.md ./
+RUN mkdir data
+
+COPY pyproject.toml .env README.md ./
 COPY nerddiary/ nerddiary/
 
 RUN python -m pip install poetry \

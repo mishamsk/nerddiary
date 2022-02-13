@@ -11,7 +11,7 @@ LOG_LEVELS = {
 }
 
 LOG_FORMATS = {
-    "DEBUG": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "DEBUG": "%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s",
     "INFO": "%(asctime)s - %(levelname)s - %(message)s",
     "WARNING": "%(asctime)s - %(levelname)s - %(message)s",
     "ERROR": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",

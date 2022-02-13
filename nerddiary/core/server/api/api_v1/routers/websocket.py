@@ -4,7 +4,7 @@ from ....server import NerdDiaryServer
 
 nds = NerdDiaryServer()
 
-websocket_router = r = APIRouter(prefix="ws")
+websocket_router = r = APIRouter(prefix="/ws")
 
 
 @r.websocket("/ws/{client_id}")
@@ -15,4 +15,4 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             data = await websocket.receive_text()
             await nds.message_queue.put((client_id, data))
     except WebSocketDisconnect:
-        nds.on_disconnect_client(client_id)
+        await nds.on_disconnect_client(client_id)

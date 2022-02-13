@@ -93,7 +93,7 @@ class AsyncApplication(abc.ABC):
         old_sigint_handler = None
 
         try:
-            self._logger.debug("astart: Replacing SIGINT handler")
+            self._logger.debug("Replacing SIGINT handler")
             old_sigint_handler = signal.signal(signal.SIGINT, __handler)
 
             func_task = self.loop.create_task(self._astart())
@@ -111,7 +111,7 @@ class AsyncApplication(abc.ABC):
             res = await self.aclose()
 
             if hit_sigint:
-                self._logger.debug("astart: Restoring SIGINT handler and re-rasing SIGINT")
+                self._logger.debug("Restoring SIGINT handler and re-rasing SIGINT")
                 signal.signal(signal.SIGINT, old_sigint_handler)
                 raise KeyboardInterrupt()
 
@@ -119,14 +119,14 @@ class AsyncApplication(abc.ABC):
                 raise
         finally:
             if not hit_sigint:
-                self._logger.debug("astart: Restoring SIGINT handler")
+                self._logger.debug("Restoring SIGINT handler")
                 signal.signal(signal.SIGINT, old_sigint_handler)
 
         return self
 
     async def aclose(self) -> bool:
         if self.closed:
-            self._logger.debug("aclose: App is already closed or hasn't been started. Skipping")
+            self._logger.debug("App is already closed or hasn't been started. Skipping")
             return True
 
         self._logger.debug("Running <_aclose> method, shielding it from SIGINT and cancellation")
@@ -142,19 +142,19 @@ class AsyncApplication(abc.ABC):
         old_sigint_handler = None
 
         try:
-            self._logger.debug("aclose: Replacing SIGINT handler")
+            self._logger.debug("Replacing SIGINT handler")
             old_sigint_handler = signal.signal(signal.SIGINT, __handler)
 
             res = await asyncio.shield(self._aclose())
 
             if hit_sigint:
-                self._logger.debug("aclose: Restoring SIGINT handler and re-rasing SIGINT")
+                self._logger.debug("Restoring SIGINT handler and re-rasing SIGINT")
                 signal.signal(signal.SIGINT, old_sigint_handler)
                 raise KeyboardInterrupt()
 
         finally:
             if not hit_sigint:
-                self._logger.debug("aclose: Restoring SIGINT handler")
+                self._logger.debug("Restoring SIGINT handler")
                 signal.signal(signal.SIGINT, old_sigint_handler)
 
         if res is True:

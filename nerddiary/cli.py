@@ -105,12 +105,15 @@ try:
     def server(ctx: click.Context, port: int) -> None:
 
         interactive = ctx.parent.params["interactive"]  # type: ignore
+        log_level: str = ctx.parent.params["log_level"]  # type: ignore
 
         if interactive:
             click.echo(click.style("Starting the server!", fg="green"))
 
         try:
-            uvicorn.run("nerddiary.core.server.main:app", host="127.0.0.1", reload=True, port=port)
+            uvicorn.run(
+                "nerddiary.core.server.main:app", host="0.0.0.0", reload=True, port=port, log_level=log_level.lower()
+            )
         except KeyboardInterrupt:
             pass
         finally:

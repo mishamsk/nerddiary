@@ -8,13 +8,15 @@ from contextlib import suppress
 
 from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse
-from jsonrpcserver import Result, Success, async_dispatch, method
+from pydantic import ValidationError
 from websockets import client
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..asynctools.asyncresult import AsyncResult
 from ..client.config import NerdDiaryClientConfig
+from ..server.rpc import RPCErrors
+from ..server.schema import NotificationType, UserSessionSchema
 
 import typing as t
 
@@ -32,26 +34,34 @@ class NerdDiaryClient(AsyncApplication):
         self._running = False
         self._connect_lock = asyncio.Lock()
         self._ws: client.WebSocketClientProtocol | None = None
-        self._rpc_dispatcher: asyncio.Task | None = None
+        self._message_dispatcher: asyncio.Task | None = None
         self._rpc_calls: t.Dict[uuid.UUID, AsyncResult] = {}
+        self._load_sessions_on_connect: asyncio.Task | None = None
+        self._sessions: t.Dict[str, UserSessionSchema] = {}
 
     async def _astart(self):
         logger.debug("Starting NerdDiary client")
         self._running = True
         await self._connect()
-        self._rpc_dispatcher = asyncio.create_task(self._rpc_dispatch())
+        self._message_dispatcher = asyncio.create_task(self._message_dispatch())
 
     async def _aclose(self) -> bool:
         logger.debug("Closing NerdDiary client")
         if self._running:
             # Stop any internal loops
-            self.stop()
+            self._stop()
+
+        # If we are still waiting for sessions on connect, wait for it to stop
+        if self._load_sessions_on_connect and self._load_sessions_on_connect.cancel():
+            logger.debug("Waiting for Load Sessions on Connect task to gracefully finish")
+            with suppress(asyncio.CancelledError):
+                await self._load_sessions_on_connect
 
         # If rpc dispatcher exist, wait for it to stop
-        if self._rpc_dispatcher and self._rpc_dispatcher.cancel():
-            logger.debug("Waiting for RPC dispatcher to gracefully finish")
+        if self._message_dispatcher and self._message_dispatcher.cancel():
+            logger.debug("Waiting for message dispatcher to gracefully finish")
             with suppress(asyncio.CancelledError):
-                await self._rpc_dispatcher
+                await self._message_dispatcher
 
         # Cancel pending rpc_calls
         logger.debug(f"Cancelling pending RPC calls (result awaits). Total count: {len(self._rpc_calls)}")
@@ -89,6 +99,8 @@ class NerdDiaryClient(AsyncApplication):
                 logger.error(err)
                 raise ConnectionError(err)
 
+            self._load_sessions_on_connect = asyncio.create_task(self._get_sessions())
+
             logger.debug(
                 f"Succesfully connected to NerdDiary server at <{self._config.server_uri}>, on try #{str(retry+1)}"
             )
@@ -98,7 +110,7 @@ class NerdDiaryClient(AsyncApplication):
             logger.debug(f"Disconnecting from NerdDiary server at <{self._config.server_uri}>")
             await self._ws.close()
 
-    async def run_rpc(
+    async def _run_rpc(
         self,
         method: str,
         params: t.Union[t.Dict[str, t.Any], t.Tuple[t.Any, ...], None] = None,
@@ -116,6 +128,7 @@ class NerdDiaryClient(AsyncApplication):
         except ConnectionClosedError:
             err = "NerdDiary server connection terminated with an error. Exiting RPC call handler"
             logger.error(err)
+            # TODO: this doesn't stop client + server is not closing gracefully on uvicorn reload
             raise ConnectionError(err)
 
         try:
@@ -123,24 +136,37 @@ class NerdDiaryClient(AsyncApplication):
                 f"Waiting for RPC call result. Method <{method}> with params <{str(params)}>. Assigned JSON RPC id: {str(id)}"
             )
             res = await self._rpc_calls[id].get()
-            del self._rpc_calls[id]
             return res
         except asyncio.CancelledError:
+            pass
+        finally:
             del self._rpc_calls[id]
 
-    async def _rpc_dispatch(self):
+    async def _message_dispatch(self):
         while self._running:
             try:
                 # TODO: this doesn't support batch calls (when incoming is a list of dicts)
                 raw_response = await self._ws.recv()
                 parsed_response = json.loads(raw_response)
-                if "method" in parsed_response:
-                    # Execute local method (from RPC call)
-                    logger.debug(
-                        f"Processing incoming RPC call from the server. Method <{parsed_response['method']}> with params <{parsed_response['params']}>. JSON RPC id: {parsed_response['id']}"
-                    )
-                    if response := await async_dispatch(raw_response, context=self):
-                        await self._ws.send(response)
+
+                if "notification" in parsed_response:
+                    # Process notification
+                    try:
+                        n_type = NotificationType(int(parsed_response["notification"]))
+                    except ValueError:
+                        n_type = -1
+                    match n_type:
+                        case NotificationType.CLIENT_CONNECTED:
+                            logger.debug(f"Recieved <{n_type.name}> notification. Ignoring")
+                        case NotificationType.CLIENT_DISCONNECTED:
+                            logger.debug(f"Recieved <{n_type.name}> notification. Ignoring")
+                        case NotificationType.SESSION_UPDATE:
+                            logger.debug(f"Recieved <{n_type.name}> notification. Processing")
+                            await self._process_session_update(parsed_response["data"])
+                        case _:
+                            logger.debug(
+                                f"Recieved unsupported notification <{parsed_response['notification']}>. Ignoring"
+                            )
                 else:
                     # Process RPC call response
                     match parse(parsed_response):
@@ -161,13 +187,51 @@ class NerdDiaryClient(AsyncApplication):
             except asyncio.CancelledError:
                 break
 
-    def stop(self):
+    def _stop(self):
         self._running = False
 
-    @method  # type:ignore
-    async def ping(self, p) -> Result:
-        print("Ndc ws called from the server with param: " + str(p))
-        return Success("pong " + str(p))
+    async def _process_session_update(self, raw_ses: t.Dict[str, t.Any]):
+        try:
+            ses = UserSessionSchema.parse_obj(raw_ses)
+            user_id = ses.user_id
 
-    async def test_api_call(self):
-        return await self.run_rpc("ping", {"p": "test"})
+            local_ses = self._sessions.get(user_id)
+            if local_ses:
+                if local_ses.user_status == ses.user_status:
+                    return
+
+                # TODO: processing of session status changes
+            else:
+                self._sessions[user_id] = ses
+        except ValidationError:
+            logger.error("Received incorrect session data from the server")
+            raise RuntimeError("Received incorrect session data from the server")
+
+    async def _get_sessions(self):
+        raw_ses = await self._run_rpc("get_sessions")
+        raw_ses_list: t.List[t.Dict[str, t.Any]] = json.loads(raw_ses)
+        for raw_ses in raw_ses_list:
+            await self._process_session_update(raw_ses)
+
+    async def get_session(self, user_id: str) -> UserSessionSchema:
+        local_ses = self._sessions.get(user_id)
+
+        if not local_ses:
+            try:
+                local_ses = UserSessionSchema.parse_raw(await self._run_rpc("get_session", params={"user_id": user_id}))
+                self._sessions[user_id] = local_ses
+            except ValidationError:
+                logger.error("Received incorrect session data from the server")
+                raise RuntimeError("Received incorrect session data from the server")
+
+        return local_ses
+
+    async def unlock_session(self, session: UserSessionSchema, password: str) -> bool:
+        try:
+            return await self._run_rpc("unlock_session", params={"user_id": session.user_id, "password": password})
+        except RuntimeError as err:
+            logger.debug("RPC Call Error: " + str(err))
+            if err.args[0] == RPCErrors.SESSION_NOT_FOUND:
+                return False
+            else:
+                return False

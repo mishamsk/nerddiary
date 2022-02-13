@@ -25,14 +25,18 @@ class TimeZone(datetime.tzinfo):  # pragma: no cover
 
     @classmethod
     def validate(cls, v):
-        if not isinstance(v, str):
-            raise TypeError("Valid timezone string required")
-        try:
-            tz = pytz.timezone(v)
-        except pytz.UnknownTimeZoneError:
-            raise ValueError("invalid timezone code")
+        if not isinstance(v, str) and not isinstance(v, datetime.tzinfo):
+            raise TypeError("Valid timezone string or tzinfo object required")
 
-        return tz
+        if isinstance(v, str):
+            try:
+                tz = pytz.timezone(v)
+            except pytz.UnknownTimeZoneError:
+                raise ValueError("invalid timezone code")
+
+            return tz
+        else:
+            return v
 
     def __repr__(self):
         return f"TzInfo({super().__repr__()})"

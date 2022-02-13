@@ -18,5 +18,8 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
     async def start(event: custom.Message):
         logger.debug(f"Recieved event <{str(event)}>. Processing")
         await event.respond(START_NEW_USER_WELCOME, reply_to=event.reply_to_msg_id)
-        res = await bot.ndc.test_api_call()
-        await event.respond(res)
+        session = await bot.ndc.get_session(event.sender_id)
+        await event.respond(str(session))
+        res = await bot.ndc.unlock_session(session=session, password="password")
+        if res:
+            await event.respond("Unlocked too!")

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from apscheduler.job import Job as APJob
 
     from ..poll.workflow import PollWorkflow
-    from ..session.session import UserSession
+    from ..server.session.session import UserSession
 
 logger = logging.getLogger(__name__)
 

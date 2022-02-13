@@ -137,7 +137,7 @@ pip-req-ext: ## generate requirements-$(extras).txt file will one of the extras 
 	poetry export -f requirements.txt --output requirements-$(extras).txt -E $(extras) --without-hashes
 
 .PHONY: docker-build
-docker-build: ## Build dev docker images
+docker-build: docker-stop ## Build dev docker images
 	@docker-compose -f docker/docker-compose-dev.yml -p nerddiary build
 
 .PHONY: docker-run
