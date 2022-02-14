@@ -13,6 +13,8 @@ class NerdDiaryClientConfig(BaseSettings):
         default="ws://server:80/api/v1/ws/"
     )
 
+    rpc_call_timeout: int = Field(default=5, gt=1, lt=3600, description="Timeout for rpc calls")
+
     reconnect_timeout: int = Field(default=15, gt=1, lt=3600, description="Timeout for connection retries")
 
     max_connect_retries: int = Field(default=10, gt=1, lt=100, description="Maximum number of connection retries")

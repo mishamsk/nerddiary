@@ -7,14 +7,11 @@ import json
 
 from pydantic import BaseModel
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .session.session import UserSessionStatus
+from .session.status import UserSessionStatus
 
 
 def generate_notification(type: NotificationType, data: Schema = None) -> str:
-    return json.dumps({"notification": str(type), "data": data.dict() if data else None})
+    return json.dumps({"notification": str(type.value), "data": data.dict() if data else None})
 
 
 @enum.unique

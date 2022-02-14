@@ -2,9 +2,10 @@
 import logging
 import os
 import sys
+from logging.config import dictConfig
 
 from nerddiary import __version__
-from nerddiary.log import configure_logger
+from nerddiary.log import get_log_config
 
 import click
 
@@ -59,7 +60,7 @@ def cli(
 ) -> None:
     """Main entry point"""
 
-    logger = configure_logger("nerddiary", log_level=log_level if not verbose else "DEBUG", log_file=log_file)
+    dictConfig(get_log_config("nerddiary", log_level=log_level if not verbose else "DEBUG", log_file=log_file))
     logger.debug("Init cli succesful")
 
 
@@ -91,7 +92,7 @@ try:
     # TODO: make a better detection mechanism
     from fastapi import APIRouter  # noqa:F401
 
-    logger.debug("Found TG Server module. Creating Bot CLI")
+    logger.debug("Found TG Server module. Creating Server CLI")
     import uvicorn
 
     @cli.command()
@@ -102,17 +103,34 @@ try:
         help="Port to run the server on",
         default=80,
     )
-    def server(ctx: click.Context, port: int) -> None:
+    @click.option(
+        "-r",
+        "--reload",
+        is_flag=True,
+        help="Whether to auto reload server on file change",
+        default=False,
+    )
+    def server(ctx: click.Context, port: int, reload: bool) -> None:
 
         interactive = ctx.parent.params["interactive"]  # type: ignore
         log_level: str = ctx.parent.params["log_level"]  # type: ignore
+        log_file: str = ctx.parent.params["log_file"]  # type: ignore
+        verbose: str = ctx.parent.params["verbose"]  # type: ignore
 
         if interactive:
             click.echo(click.style("Starting the server!", fg="green"))
 
         try:
             uvicorn.run(
-                "nerddiary.core.server.main:app", host="0.0.0.0", reload=True, port=port, log_level=log_level.lower()
+                "nerddiary.core.server.main:app",
+                host="0.0.0.0",
+                reload=reload,
+                reload_excludes="nerddiary/bots*, nerddiary/core/client*",
+                port=port,
+                log_level="info",
+                log_config=get_log_config(
+                    "nerddiary", log_level=log_level if not verbose else "DEBUG", log_file=log_file
+                ),
             )
         except KeyboardInterrupt:
             pass

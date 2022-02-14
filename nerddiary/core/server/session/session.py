@@ -2,36 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import enum
+import logging
 from abc import ABC, abstractmethod
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 from ...data.data import DataConnection, DataProvider
 from ...user.user import User
-from ..schema import UserSessionSchema
+from ..schema import NotificationType, Schema, UserSessionSchema
+from .status import UserSessionStatus
 
-from typing import TYPE_CHECKING, Any, Dict, Set, Tuple
+from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
 
 # from datetime import datetime
 
 
 # from ..poll.workflow import PollWorkflow
-
-
-if TYPE_CHECKING:
-    import asyncio
-
-    from ..schema import NotificationType, Schema
-
-
-@enum.unique
-class UserSessionStatus(enum.IntFlag):
-    NEW = 0
-    LOCKED = 1
-    UNLOCKED = 2
-    CONFIG_EXIST = 4
-    DATA_EXIST = 8
 
 
 class UserSession(BaseModel):
@@ -44,7 +32,7 @@ class UserSession(BaseModel):
     _session_spawner: SessionSpawner | None = PrivateAttr(default=None)
 
     async def unlock(self, password_or_key: str | bytes) -> bool:
-        if self.user_status & UserSessionStatus.LOCKED:
+        if self.user_status > UserSessionStatus.LOCKED:
             return True
 
         if self._data_connection:
@@ -57,10 +45,7 @@ class UserSession(BaseModel):
 
         new_status = UserSessionStatus.UNLOCKED
         if self._session_spawner._data_provoider.check_config_exist(self.user_id):
-            new_status &= UserSessionStatus.CONFIG_EXIST
-
-        if self._session_spawner._data_provoider.check_data_exist(self.user_id):
-            new_status &= UserSessionStatus.DATA_EXIST
+            new_status = UserSessionStatus.CONFIGURED
 
         await self.set_status(new_status=new_status)
 
@@ -71,17 +56,10 @@ class UserSession(BaseModel):
             return
 
         self.user_status = new_status
-        await self._session_spawner._notification_queue.put(
-            (
-                NotificationType.SESSION_UPDATE,
-                UserSessionSchema(user_id=self.user_id, user_status=self.user_status, key=self._data_connection.key),
-                Set(),
-                None,
-            )
+        await self._session_spawner._notify(
+            type=NotificationType.SESSION_UPDATE,
+            data=UserSessionSchema(user_id=self.user_id, user_status=self.user_status, key=self._data_connection.key),
         )
-
-    async def close(self):
-        await self._session_spawner.close_session(self)
 
 
 class SessionCorruptionType(enum.Enum):
@@ -113,22 +91,66 @@ class SessionSpawner(ABC):
         self,
         params: Dict[str, Any] | None,
         data_provider: DataProvider,
-        notification_queue: asyncio.Queue[Tuple[NotificationType, Schema | None, Set[str], str | None]],
+        notification_queue: asyncio.Queue[Tuple[NotificationType, Schema | None, Set[str], str | None, str | None]],
+        logger: logging.Logger = logging.getLogger(__name__),
     ) -> None:
         super().__init__()
 
         self._data_provoider = data_provider
         self._raw_params = params
         self._notification_queue = notification_queue
+        self._sessions: Dict[str, UserSession] = {}
+        self._logger = logger
+
+    def get_all(self) -> Iterable[UserSession]:
+        return self._sessions.values()
+
+    async def get(self, user_id: str) -> UserSession | None:
+        if user_id in self._sessions:
+            return self._sessions[user_id]
+
+        try:
+            return await self._load_or_create_session(user_id)
+        except SessionCorruptionError:
+            self._logger.exception("Error getting session")
+            return None
+
+    async def close(self) -> None:
+        for user_id in self._sessions:
+            await self._close_session(user_id)
+
+    async def load_sessions(self) -> None:
+        self._sessions = await self._load_sessions()
+        if len(self._sessions) > 0:
+            to_notify: List[Coroutine[Any, Any, None]] = []
+            for user_id, ses in self._sessions.items():
+                to_notify.append(
+                    self._notify(
+                        NotificationType.SESSION_UPDATE, UserSessionSchema(user_id=user_id, user_status=ses.user_status)
+                    )
+                )
+
+            if to_notify:
+                await asyncio.gather(*to_notify)
+
+    async def _notify(
+        self,
+        type: NotificationType,
+        data: Schema = None,
+        exclude: Set[str] = set(),
+        source: str = None,
+        target: str = None,
+    ):
+        await self._notification_queue.put((type, data, exclude, source, target))
 
     @abstractmethod
-    async def create_session(self, user_id: str) -> UserSession:
+    async def _load_or_create_session(self, user_id: str) -> UserSession:
         pass
 
     @abstractmethod
-    async def close_session(self, session: UserSession):
+    async def _close_session(self, user_id: str):
         pass
 
     @abstractmethod
-    async def load_sessions(self) -> Dict[str, UserSession]:
+    async def _load_sessions(self) -> Dict[str, UserSession]:
         pass

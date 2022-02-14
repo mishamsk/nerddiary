@@ -141,7 +141,7 @@ docker-build: docker-stop ## Build dev docker images
 	@docker-compose -f docker/docker-compose-dev.yml -p nerddiary build
 
 .PHONY: docker-run
-docker-run: ## Run dev docker containers
+docker-run: docker-stop  ## Run dev docker containers
 	@docker-compose -f docker/docker-compose-dev.yml -p nerddiary up --remove-orphans -d
 
 .PHONY: docker-stop

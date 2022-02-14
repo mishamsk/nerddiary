@@ -1,43 +1,44 @@
 """Module for setting up logging."""
-import logging
-import sys
+from typing import Any, Dict
 
-LOG_LEVELS = {
-    "DEBUG": logging.DEBUG,
-    "INFO": logging.INFO,
-    "WARNING": logging.WARNING,
-    "ERROR": logging.ERROR,
-    "CRITICAL": logging.CRITICAL,
+FORMATTERS = {
+    "DEBUG": {"format": "%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s"},
+    "INFO": {"format": "%(asctime)s - %(levelname)s - %(message)s"},
+    "WARNING": {"format": "%(asctime)s - %(levelname)s - %(message)s"},
+    "ERROR": {"format": "%(asctime)s - %(levelname)s - %(name)s - %(message)s"},
+    "CRITICAL": {"format": "%(asctime)s - %(levelname)s - %(name)s - %(message)s"},
 }
 
-LOG_FORMATS = {
-    "DEBUG": "%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s",
-    "INFO": "%(asctime)s - %(levelname)s - %(message)s",
-    "WARNING": "%(asctime)s - %(levelname)s - %(message)s",
-    "ERROR": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    "CRITICAL": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+HANDLERS_BASE = {
+    "console": {"class": "logging.StreamHandler", "formatter": "INFO", "stream": "ext://sys.stdout"},
+    "file": {"class": "logging.FileHandler", "formatter": "INFO", "filename": "app.log"},
 }
 
 
-def configure_logger(name: str, log_level: str = "INFO", log_file: str | None = None) -> logging.Logger:
-    """Configure logging
-
+def get_log_config(name: str, log_level: str = "INFO", log_file: str | None = None) -> Dict[str, Any]:
+    """Return a dict usable in dictConfig
     Set up logging to stdout with ``log_level``. If ``log_file`` is given use it instead.
     """
-    # Set up 'cookiecutter' logger
-    logger = logging.getLogger(name)
-    asyncio_logger = logging.getLogger("asyncio")
-    logger.setLevel(LOG_LEVELS[log_level])
 
-    handler: logging.Handler = logging.StreamHandler(stream=sys.stdout)
-    # Create a file handler if a log file is provided
     if log_file is not None:
-        handler = logging.FileHandler(log_file)
+        handlers = {"handler": HANDLERS_BASE["file"]}
+        handlers["handler"]["filename"] = log_file
+    else:
+        handlers = {"handler": HANDLERS_BASE["console"]}
+    handlers["console"] = HANDLERS_BASE["console"]
 
-    formatter = logging.Formatter(LOG_FORMATS[log_level])
-    handler.setLevel(LOG_LEVELS[log_level])
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    asyncio_logger.addHandler(handler)
+    handlers["handler"]["formatter"] = log_level
+    log_conf = {"level": log_level, "handlers": ["handler"]}
 
-    return logger
+    res = {
+        "version": 1,
+        "formatters": FORMATTERS,
+        "handlers": handlers,
+        "loggers": {
+            name: log_conf,
+            "asyncio": log_conf,
+            "uvicorn": {"level": "INFO", "handlers": ["console", "handler"]},
+        },
+    }
+
+    return res

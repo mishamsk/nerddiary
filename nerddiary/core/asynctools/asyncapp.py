@@ -26,6 +26,7 @@ class AsyncApplication(abc.ABC):
         self._logger = logger or logging.getLogger(self.__class__.__name__)
         self._loop_started_by_self = False
         self._closed = True
+        self._closing = False
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -125,6 +126,11 @@ class AsyncApplication(abc.ABC):
         return self
 
     async def aclose(self) -> bool:
+        if self._closing:
+            return True
+        else:
+            self._closing = True
+
         if self.closed:
             self._logger.debug("App is already closed or hasn't been started. Skipping")
             return True
@@ -148,7 +154,7 @@ class AsyncApplication(abc.ABC):
             res = await asyncio.shield(self._aclose())
 
             if hit_sigint:
-                self._logger.debug("Restoring SIGINT handler and re-rasing SIGINT")
+                self._logger.debug("Restoring SIGINT handler and re-raising SIGINT")
                 signal.signal(signal.SIGINT, old_sigint_handler)
                 raise KeyboardInterrupt()
 
@@ -157,6 +163,7 @@ class AsyncApplication(abc.ABC):
                 self._logger.debug("Restoring SIGINT handler")
                 signal.signal(signal.SIGINT, old_sigint_handler)
 
+        self._closing = False
         if res is True:
             self._closed = True
             return True

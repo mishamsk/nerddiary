@@ -1,8 +1,10 @@
+import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ....server import NerdDiaryServer
 
-nds = NerdDiaryServer()
+nds = NerdDiaryServer(logger=logging.getLogger("nerddiary.server"))
 
 websocket_router = r = APIRouter(prefix="/ws")
 

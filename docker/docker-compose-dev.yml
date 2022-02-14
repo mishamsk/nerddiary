@@ -8,9 +8,10 @@ services:
       dockerfile: ./docker/Dockerfile
     tty: true
     container_name: nerddiary-server
-    command: nerddiary --log-level DEBUG --log-file /app/log/server.log server -p 80
+    command: nerddiary --log-level DEBUG --log-file /app/log/server.log server -p 80 -r
     volumes:
-      - ./../:/app/log
+      - ./../devplayground/:/app/log
+      - ./../devplayground/:/app/data
       - ./../nerddiary:/app/nerddiary
     ports:
       - 8880:80
@@ -25,5 +26,6 @@ services:
     container_name: nerddiary-tgbot
     command: nerddiary --log-level DEBUG --log-file /app/log/tgbot.log bot
     volumes:
-      - ./../:/app/log
+      - ./../devplayground/:/app/log
+      - ./../devplayground/:/app/data
       - ./../nerddiary:/app/nerddiary
