@@ -204,11 +204,21 @@ class NerdDiaryClient(AsyncApplication):
                             self._logger.debug(
                                 f"Processing RPC call response from the server. Result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
                             )
+                            if id not in self._rpc_calls:
+                                self._logger.warning(
+                                    f"RPC call response came too late from the server. Result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
+                                )
+                                continue
+
                             self._rpc_calls[id]._fut.set_result(result)
                         case Error(code, message, data, id):
                             logging.error(
                                 f"Processing RPC call response from the server. Got error {code=} {message=} data={mask_sensitive(str(data))}. JSON RPC id: {id}"
                             )
+                            if id not in self._rpc_calls:
+                                self._logger.warning("RPC call response came too late from the server")
+                                continue
+
                             self._rpc_calls[id]._fut.set_exception(RPCError(code, message, data))
             except ConnectionClosedOK:
                 if not await self._connect():
@@ -238,7 +248,7 @@ class NerdDiaryClient(AsyncApplication):
             local_ses = self._sessions.get(user_id)
             if local_ses:
                 if ses.user_status == UserSessionStatus.LOCKED and local_ses.user_status > UserSessionStatus.LOCKED:
-                    await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key.decode()})
+                    await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key})
                 else:
                     self._sessions[user_id] = ses
             else:

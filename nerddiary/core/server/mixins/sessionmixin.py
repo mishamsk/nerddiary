@@ -55,7 +55,7 @@ class SessionMixin:
         if not ses.user_status > UserSessionStatus.LOCKED:
             return Error(RPCErrors.SESSION_INCORRECT_STATUS, "Session is locked")
 
-        if ses.set_config(config=config):
+        if await ses.set_config(config=config):
             return Success(True)
         else:
             return InvalidParams("Configuration is not valid")

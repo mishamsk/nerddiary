@@ -47,7 +47,11 @@ class UserSession(BaseModel):
 
         new_status = UserSessionStatus.UNLOCKED
         if self._session_spawner._data_provoider.check_config_exist(self.user_id):
-            new_status = UserSessionStatus.CONFIGURED
+            try:
+                self._user_config = User.parse_raw(self._data_connection.load_config())  # type:ignore
+                new_status = UserSessionStatus.CONFIGURED
+            except ValidationError:
+                pass
 
         await self._set_status(new_status=new_status)
 
@@ -68,7 +72,9 @@ class UserSession(BaseModel):
         self.user_status = new_status
         await self._session_spawner._notify(
             type=NotificationType.SESSION_UPDATE,
-            data=UserSessionSchema(user_id=self.user_id, user_status=self.user_status, key=self._data_connection.key),
+            data=UserSessionSchema(
+                user_id=self.user_id, user_status=self.user_status, key=self._data_connection.key.decode()
+            ),
         )
 
 

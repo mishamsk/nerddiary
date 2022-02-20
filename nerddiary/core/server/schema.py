@@ -32,7 +32,7 @@ class ClientSchema(Schema):
 class UserSessionSchema(Schema):
     user_id: str
     user_status: UserSessionStatus
-    key: bytes | None = None
+    key: str | None = None
 
 
 class PollBaseSchema(Schema):

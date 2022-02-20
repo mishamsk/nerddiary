@@ -14,7 +14,7 @@ from telethon import events, functions, types
 
 from ..strings import SERVER_ERROR
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from ..bot import NerdDiaryTGBot
@@ -130,10 +130,13 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                 await event.respond(START_UNLOCKED_CONFIG_REQUEST)
                 if not bot.set_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT):
                     await event.respond(SERVER_ERROR)
+                else:
+                    raise events.StopPropagation
 
     @bot.bot.on(
         events.NewMessage(
             chats=bot.config.ALLOWED_USERS,
+            pattern=r"^[^\/].*",
             func=lambda e: bot.get_expected_message(str(e.sender_id)) == ROUTE_CONFIGURATION_PROMPT,
         )
     )
@@ -166,7 +169,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
 
         bot.clear_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT)
 
-        polls: List[PollBaseSchema] = await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
+        polls: List[Dict[str, Any]] = await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
 
         if polls:
             commands = await bot.bot(
@@ -174,6 +177,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
             )
 
             for poll in polls:
+                poll = PollBaseSchema.parse_obj(poll)
                 commands.append(types.BotCommand(command=poll.command, description=poll.description or poll.poll_name))
 
             await bot.bot(

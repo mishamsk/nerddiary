@@ -136,6 +136,8 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
 
             except asyncio.CancelledError:
                 break
+            except Exception:
+                self._logger.exception("Unexpected exception in notification dispatcher")
 
     async def _message_dispatch(self):
         self._logger.debug("Starting message dispatcher")
@@ -194,7 +196,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         for session in self._sessions.get_all():
             key = None
             if session._data_connection:
-                key = session._data_connection.key
+                key = session._data_connection.key.decode()
             await self.notify(
                 NotificationType.SESSION_UPDATE,
                 UserSessionSchema(user_id=session.user_id, user_status=session.user_status, key=key),
