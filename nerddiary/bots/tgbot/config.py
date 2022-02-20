@@ -19,6 +19,7 @@ class NerdDiaryTGBotConfig(BaseSettings):
     SERVER: AnyUrl | None = Field(default=None)
     ADMINS: List[int] = Field(min_items=1)
     ALLOWED_USERS: Optional[List[int]] = Field(min_items=1)
+    SESSION_UPDATE_TIMEOUT: float = 5
 
     @validator("SERVER")
     def server_port_must_be_correct(cls, v: AnyUrl):

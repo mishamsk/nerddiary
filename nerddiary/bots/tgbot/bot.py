@@ -1,8 +1,7 @@
 import asyncio
 import logging
 
-from telethon import TelegramClient
-from telethon.tl.types import User
+from telethon import TelegramClient, functions, types
 
 from ...core.asynctools.asyncapp import AsyncApplication
 from ...core.client.client import NerdDiaryClient
@@ -33,7 +32,8 @@ class NerdDiaryTGBot(AsyncApplication):
         )
         self._bot = bot
         self._ndc = NerdDiaryClient(logger=logger.getChild("ndc"))
-        self._me = None
+        self._expected_message_lock = asyncio.Lock()
+        self._expected_message_route: str | None = None
 
     @property
     def config(self) -> NerdDiaryTGBotConfig:
@@ -48,13 +48,44 @@ class NerdDiaryTGBot(AsyncApplication):
         return self._ndc
 
     @property
-    def me(self) -> User | None:
-        return self._me  # type: ignore
+    def expected_message(self) -> str | None:
+        return self._expected_message_route
+
+    async def set_expected_message_route(self, route: str) -> bool:
+        async with self._expected_message_lock:
+            if self._expected_message_route is not None:
+                return False
+            else:
+                self._expected_message_route = route
+                return True
+
+    async def clear_expected_message_route(self, route: str) -> bool:
+        async with self._expected_message_lock:
+            if self._expected_message_route == route:
+                self._expected_message_route = None
+                return True
+            else:
+                return False
 
     async def _astart(self):
         self._logger.debug("Starting NerdDiary TG Bot")
         asyncio.create_task(self._ndc.astart())
         await self._bot.start(bot_token=self._bot_config.BOT_TOKEN.get_secret_value())  # type:ignore
+        # Add standard commands
+        self._logger.debug("Adding standard bot commands")
+        commands = [
+            types.BotCommand(command="start", description="Start bot"),
+            types.BotCommand(command="help", description="Помощь"),
+        ]
+
+        await self.bot(
+            functions.bots.SetBotCommandsRequest(
+                scope=types.BotCommandScopeDefault(),
+                lang_code="en",
+                commands=commands,
+            )
+        )
+
         await handlers.init(bot=self, root_logger=self._logger)
         self._me = await self._bot.get_me()
 

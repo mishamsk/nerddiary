@@ -52,11 +52,21 @@
                 1. *None so far*
         3. Handler sub-handler-call
 
-# Handlers
+# Handling messages
 
-## Routers
+## Router logic
 
 /[COMMAND|JOB|MESSAGE]
     COMMAND
     JOB
     MESSAGE/[POLL|REPORT|SETTINGS]/[OBJECT.ID]/[SKIP|ANSWER]/[id]
+
+## Handlers
+
+### Start
+
+1. Session exist
+2. Session doesn't exist
+    1. Known user
+    2. Unknown user
+        1. 

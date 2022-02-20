@@ -121,11 +121,13 @@ try:
             click.echo(click.style("Starting the server!", fg="green"))
 
         try:
+            # TODO: Separate development config with reload from normal cli
             uvicorn.run(
                 "nerddiary.core.server.main:app",
                 host="0.0.0.0",
                 reload=reload,
-                reload_excludes="nerddiary/bots*, nerddiary/core/client*",
+                reload_dirs=["nerddiary"],
+                reload_excludes=["nerddiary/bots", "nerddiary/core/client"],
                 port=port,
                 log_level="info",
                 log_config=get_log_config(

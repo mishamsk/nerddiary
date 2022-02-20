@@ -33,3 +33,9 @@ class UserSessionSchema(Schema):
     user_id: str
     user_status: UserSessionStatus
     key: bytes | None = None
+
+
+class PollBaseSchema(Schema):
+    poll_name: str
+    command: str
+    description: str | None

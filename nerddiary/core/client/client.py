@@ -6,6 +6,9 @@ import logging
 import uuid
 from contextlib import suppress
 
+from nerddiary.core.server.rpc import RPCErrors
+from nerddiary.core.server.session.status import UserSessionStatus
+
 from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse
 from pydantic import ValidationError
@@ -16,13 +19,12 @@ from ..asynctools.asyncapp import AsyncApplication
 from ..client.config import NerdDiaryClientConfig
 from ..server.schema import NotificationType, UserSessionSchema
 from ..utils.sensitive import mask_sensitive
-from .mixins.sessionmixin import SessionMixin
 from .rpc import AsyncRPCResult, RPCError
 
 import typing as t
 
 
-class NerdDiaryClient(AsyncApplication, SessionMixin):
+class NerdDiaryClient(AsyncApplication):
     def __init__(
         self,
         *,
@@ -173,7 +175,6 @@ class NerdDiaryClient(AsyncApplication, SessionMixin):
 
         while self._running:
             try:
-                # TODO: this doesn't support batch calls (when incoming is a list of dicts)
                 raw_response = await self._ws.recv()
                 self._logger.debug(f"Recieved message <{mask_sensitive(str(raw_response))}>")
                 parsed_response = json.loads(raw_response)
@@ -219,7 +220,7 @@ class NerdDiaryClient(AsyncApplication, SessionMixin):
                 break
             except Exception:
                 err = "Unexpected exception during message dispatching. Closing client"
-                self._logger.error(err)
+                self._logger.exception(err)
                 has_raised = True
                 break
 
@@ -236,12 +237,44 @@ class NerdDiaryClient(AsyncApplication, SessionMixin):
 
             local_ses = self._sessions.get(user_id)
             if local_ses:
-                if local_ses.user_status == ses.user_status:
-                    return
-
-                # TODO: processing of session status changes
+                if ses.user_status == UserSessionStatus.LOCKED and local_ses.user_status > UserSessionStatus.LOCKED:
+                    await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key.decode()})
+                else:
+                    self._sessions[user_id] = ses
             else:
                 self._sessions[user_id] = ses
         except ValidationError:
-            self._logger.error("Received incorrect session data from the server")
+            self._logger.exception("Received incorrect session data from the server")
             raise RuntimeError("Received incorrect session data from the server")
+
+    async def get_session(self, user_id: str) -> UserSessionSchema | None:
+        local_ses = self._sessions.get(user_id)
+
+        if not local_ses:
+            try:
+                res = await self._run_rpc("get_session", params={"user_id": str(user_id)})
+                local_ses = UserSessionSchema.parse_raw(res)
+                self._sessions[user_id] = local_ses
+            except ValidationError:
+                self._logger.exception("Received incorrect session data from the server")
+            except RPCError:
+                pass
+
+        return local_ses
+
+    async def exec_api_method(self, method: str, **params) -> t.Any:
+        try:
+            res = await self._run_rpc(method=method, params=params)
+        except RPCError as r_err:
+            if r_err.code < RPCErrors.ERROR_SERVER_ERROR:
+                raise
+            else:
+                err = "Unexpected exception during execution of an API call."
+                self._logger.exception(err)
+                return None
+        except Exception:
+            err = "Unexpected exception during execution of an API call."
+            self._logger.exception(err)
+            return None
+
+        return res

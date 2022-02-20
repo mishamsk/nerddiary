@@ -8,13 +8,14 @@ from contextlib import suppress
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi.websockets import WebSocket
-from jsonrpcserver import Error, InvalidParams, Result, Success, async_dispatch, method
+from jsonrpcserver import async_dispatch
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..data.data import DataProvider
 from ..utils.sensitive import mask_sensitive
 from .config import NerdDiaryServerConfig
-from .rpc import RPCErrors
+from .mixins.pollmixin import PollMixin
+from .mixins.sessionmixin import SessionMixin
 from .schema import ClientSchema, NotificationType, Schema, UserSessionSchema, generate_notification
 from .session.session import SessionSpawner
 from .session.string import StringSessionSpawner
@@ -22,7 +23,7 @@ from .session.string import StringSessionSpawner
 from typing import Dict, Set, Tuple
 
 
-class NerdDiaryServer(AsyncApplication):
+class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
     def __init__(
         self,
         session: str | SessionSpawner = "default",
@@ -223,35 +224,3 @@ class NerdDiaryServer(AsyncApplication):
         target: str = None,
     ):
         await self._notification_queue.put((type, data, exclude, source, target))
-
-    @method  # type:ignore
-    async def get_session(self, user_id: str) -> Result:
-        self._logger.debug("Processing RPC call")
-
-        ses = await self._sessions.get(user_id)
-
-        if not ses:
-            return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
-
-        return Success(UserSessionSchema(user_id=ses.user_id, user_status=ses.user_status).json(exclude_unset=True))
-
-    @method  # type:ignore
-    async def unlock_session(self, user_id: str, password: str = None, key: str = None) -> Result:
-        self._logger.debug("Processing RPC call")
-
-        ses = await self._sessions.get(user_id)
-
-        if not ses:
-            return Error(RPCErrors.SESSION_NOT_FOUND, "Session doesn't exist")
-
-        bkey = None
-        if key:
-            bkey = key.encode()
-
-        pass_or_key = bkey or password
-        if not pass_or_key:
-            return InvalidParams("Password or key must be present")
-
-        res = await ses.unlock(pass_or_key)
-
-        return Success(str(res))

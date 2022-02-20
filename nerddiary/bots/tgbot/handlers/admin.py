@@ -16,6 +16,10 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
     # Add admin commands
     logger.debug("Adding admin bot commands")
     to_add = []
+    commands = await bot.bot(functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code="en"))
+
+    commands.append(types.BotCommand(command="reload_ndc", description="Reload NDC"))
+
     for admin in bot.config.ADMINS:
         peer = await bot.bot.get_input_entity(admin)
         to_add.append(
@@ -23,7 +27,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                 functions.bots.SetBotCommandsRequest(
                     scope=types.BotCommandScopePeer(peer=peer),
                     lang_code="en",
-                    commands=[types.BotCommand(command="reload_ndce", description="Reload NDC")],
+                    commands=commands,
                 )
             )
         )

@@ -7,9 +7,9 @@ import enum
 import logging
 from abc import ABC, abstractmethod
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
-from ...data.data import DataConnection, DataProvider
+from ...data.data import DataConnection, DataProvider, IncorrectPasswordKeyError
 from ...user.user import User
 from ..schema import NotificationType, Schema, UserSessionSchema
 from .status import UserSessionStatus
@@ -38,20 +38,30 @@ class UserSession(BaseModel):
         if self._data_connection:
             raise RuntimeError("Data connection already existed when trying to unlock")
 
-        # TODO: Proper data exception handling
-        self._data_connection = self._session_spawner._data_provoider.get_connection(
-            user_id=self.user_id, password_or_key=password_or_key
-        )
+        try:
+            self._data_connection = self._session_spawner._data_provoider.get_connection(
+                user_id=self.user_id, password_or_key=password_or_key
+            )
+        except IncorrectPasswordKeyError:
+            return False
 
         new_status = UserSessionStatus.UNLOCKED
         if self._session_spawner._data_provoider.check_config_exist(self.user_id):
             new_status = UserSessionStatus.CONFIGURED
 
-        await self.set_status(new_status=new_status)
+        await self._set_status(new_status=new_status)
 
         return True
 
-    async def set_status(self, new_status: UserSessionStatus):
+    async def set_config(self, config: str) -> bool:
+        try:
+            self._user_config = User.parse_raw(config)
+            await self._set_status(new_status=UserSessionStatus.CONFIGURED)
+            return True
+        except ValidationError:
+            return False
+
+    async def _set_status(self, new_status: UserSessionStatus):
         if self.user_status == new_status:
             return
 
