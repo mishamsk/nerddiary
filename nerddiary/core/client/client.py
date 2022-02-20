@@ -248,6 +248,7 @@ class NerdDiaryClient(AsyncApplication):
             raise RuntimeError("Received incorrect session data from the server")
 
     async def get_session(self, user_id: str) -> UserSessionSchema | None:
+        assert isinstance(user_id, str)
         local_ses = self._sessions.get(user_id)
 
         if not local_ses:
@@ -266,7 +267,7 @@ class NerdDiaryClient(AsyncApplication):
         try:
             res = await self._run_rpc(method=method, params=params)
         except RPCError as r_err:
-            if r_err.code < RPCErrors.ERROR_SERVER_ERROR:
+            if r_err.code > RPCErrors.ERROR_SERVER_ERROR:
                 raise
             else:
                 err = "Unexpected exception during execution of an API call."

@@ -48,27 +48,39 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
     @bot.bot.on(events.NewMessage(chats=bot.config.ALLOWED_USERS, pattern=r"^\/start"))
     async def start(event: events.NewMessage.Event):
         logger.debug(f"Recieved event <{str(event)}>. Processing")
-        session = await bot.ndc.get_session(event.sender_id)
+        session = await bot.ndc.get_session(str(event.sender_id))
         if not session:
             await event.respond(SERVER_ERROR)
         else:
             if session.user_status == UserSessionStatus.NEW:
                 await event.respond(START_NEW_USER_WELCOME)
-                if not bot.set_expected_message_route(ROUTE_PASSWORD_PROMPT):
+                if not bot.set_expected_message_route(str(event.sender_id), ROUTE_PASSWORD_PROMPT):
                     await event.respond(SERVER_ERROR)
+                else:
+                    raise events.StopPropagation
             elif session.user_status == UserSessionStatus.LOCKED:
                 await event.respond(START_EXISTING_USER_WELCOME)
-                if not bot.set_expected_message_route(ROUTE_PASSWORD_PROMPT):
+                if not bot.set_expected_message_route(str(event.sender_id), ROUTE_PASSWORD_PROMPT):
+                    await event.respond(SERVER_ERROR)
+                else:
+                    raise events.StopPropagation
+            elif session.user_status == UserSessionStatus.UNLOCKED:
+                await event.respond(START_UNLOCKED_CONFIG_REQUEST)
+                if not bot.set_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT):
                     await event.respond(SERVER_ERROR)
             else:
                 await event.respond(START_ACTIVE_USER_RESPONSE)
 
-    @bot.bot.on(events.NewMessage(chats=bot.config.ALLOWED_USERS))
+    @bot.bot.on(
+        events.NewMessage(
+            chats=bot.config.ALLOWED_USERS,
+            pattern=r"^[^\/].*",
+            func=lambda e: bot.get_expected_message(str(e.sender_id)) == ROUTE_PASSWORD_PROMPT,
+        )
+    )
     async def unlock(event: events.NewMessage.Event):
         logger.debug(f"Recieved event <{str(event)}>. Processing")
-        session = await bot.ndc.get_session(event.sender_id)
-
-        await event.respond(bot.expected_message)
+        session = await bot.ndc.get_session(str(event.sender_id))
 
         if not session:
             await event.respond(SERVER_ERROR)
@@ -81,7 +93,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                     method="unlock_session", user_id=session.user_id, password=event.message.message
                 )
 
-                if res is not True:
+                if res != "True":
                     await event.respond(SERVER_ERROR)
                     return
             elif session.user_status == UserSessionStatus.LOCKED:
@@ -97,35 +109,37 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                         await event.respond(START_LOCKED_INCORRECT_PASSWORD)
                         return
 
-                if res is not True:
+                if res != "True":
                     await event.respond(SERVER_ERROR)
                     return
 
             logger.debug("Waiting for user status to update after unlock")
             wait = 0
-            while not session.user_status > UserSessionStatus.LOCKED or wait > bot.config.SESSION_UPDATE_TIMEOUT:
+            while not session.user_status > UserSessionStatus.LOCKED and wait < bot.config.SESSION_UPDATE_TIMEOUT:
                 wait += 1
                 await asyncio.sleep(1)
-                session = await bot.ndc.get_session(event.sender_id)
+                session = await bot.ndc.get_session(str(event.sender_id))
 
             if not session.user_status > UserSessionStatus.LOCKED:
                 await event.respond(SERVER_ERROR)
+                return
 
-            await bot.clear_expected_message_route(ROUTE_PASSWORD_PROMPT)
+            bot.clear_expected_message_route(str(event.sender_id), ROUTE_PASSWORD_PROMPT)
 
             if session.user_status == UserSessionStatus.UNLOCKED:
                 await event.respond(START_UNLOCKED_CONFIG_REQUEST)
-                if not bot.set_expected_message_route(ROUTE_CONFIGURATION_PROMPT):
+                if not bot.set_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT):
                     await event.respond(SERVER_ERROR)
 
     @bot.bot.on(
         events.NewMessage(
-            chats=bot.config.ALLOWED_USERS, func=lambda e: bot.expected_message == ROUTE_CONFIGURATION_PROMPT
+            chats=bot.config.ALLOWED_USERS,
+            func=lambda e: bot.get_expected_message(str(e.sender_id)) == ROUTE_CONFIGURATION_PROMPT,
         )
     )
     async def config(event: events.NewMessage.Event):
         logger.debug(f"Recieved event <{str(event)}>. Processing")
-        session = await bot.ndc.get_session(event.sender_id)
+        session = await bot.ndc.get_session(str(event.sender_id))
 
         if not session:
             await event.respond(SERVER_ERROR)
@@ -150,7 +164,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
             await event.respond(START_UNLOCKED_CONFIG_INCORRECT)
             return
 
-        await bot.clear_expected_message_route(ROUTE_CONFIGURATION_PROMPT)
+        bot.clear_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT)
 
         polls: List[PollBaseSchema] = await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
 

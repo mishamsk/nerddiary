@@ -8,6 +8,8 @@ from ...core.client.client import NerdDiaryClient
 from . import handlers
 from .config import NerdDiaryTGBotConfig
 
+from typing import Dict
+
 
 class NerdDiaryTGBot(AsyncApplication):
     def __init__(
@@ -32,8 +34,7 @@ class NerdDiaryTGBot(AsyncApplication):
         )
         self._bot = bot
         self._ndc = NerdDiaryClient(logger=logger.getChild("ndc"))
-        self._expected_message_lock = asyncio.Lock()
-        self._expected_message_route: str | None = None
+        self._expected_message_route: Dict[str, str | None] = {}
 
     @property
     def config(self) -> NerdDiaryTGBotConfig:
@@ -47,25 +48,22 @@ class NerdDiaryTGBot(AsyncApplication):
     def ndc(self) -> NerdDiaryClient:
         return self._ndc
 
-    @property
-    def expected_message(self) -> str | None:
-        return self._expected_message_route
+    def get_expected_message(self, user_id: str) -> str | None:
+        return self._expected_message_route.get(user_id)
 
-    async def set_expected_message_route(self, route: str) -> bool:
-        async with self._expected_message_lock:
-            if self._expected_message_route is not None:
-                return False
-            else:
-                self._expected_message_route = route
-                return True
+    def set_expected_message_route(self, user_id: str, route: str) -> bool:
+        if self._expected_message_route.get(user_id) is not None:
+            return False
+        else:
+            self._expected_message_route[user_id] = route
+            return True
 
-    async def clear_expected_message_route(self, route: str) -> bool:
-        async with self._expected_message_lock:
-            if self._expected_message_route == route:
-                self._expected_message_route = None
-                return True
-            else:
-                return False
+    def clear_expected_message_route(self, user_id: str, route: str) -> bool:
+        if self._expected_message_route.get(user_id) == route:
+            self._expected_message_route[user_id] = None
+            return True
+        else:
+            return False
 
     async def _astart(self):
         self._logger.debug("Starting NerdDiary TG Bot")

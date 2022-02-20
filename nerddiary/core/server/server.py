@@ -107,6 +107,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self._logger.debug("Starting notification dispatcher")
 
         while self._running:
+            type = data = exclude = source = target = None
             try:
                 # Wait for clients
                 if len(self._actve_connections) == 0:
@@ -118,7 +119,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
                     self._logger.debug(
                         f"Sending notification to client id <{target}>: {type=} data={mask_sensitive(str(data))} {source=} {exclude=}"
                     )
-                    await self.broadcast(generate_notification(type, data), exclude=exclude)
+                    await self.send_personal_message(client_id=target, message=generate_notification(type, data))
 
                     self._logger.debug("Finished sending notification")
                 else:
@@ -189,7 +190,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self._actve_connections[client_id] = websocket
         self._logger.debug(f"Notifying other clients about {client_id=}")
         await self.notify(NotificationType.CLIENT_CONNECTED, ClientSchema(client_id=client_id), source=client_id)
-        self._logger.debug(f"Sending {client_id=} all existing sessions")
+        self._logger.debug(f"Sending {client_id=} all existing sessions. A total of {len(self._sessions._sessions)}")
         for session in self._sessions.get_all():
             key = None
             if session._data_connection:
@@ -207,7 +208,9 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
 
     async def broadcast(self, message: str, exclude: Set[str] = set()):
         for client_id, ws in self._actve_connections.items():
+            self._logger.debug(f"Got {client_id=}. Checking if it is among {exclude=}")
             if client_id not in exclude:
+                self._logger.debug(f"Sending {client_id=} message={mask_sensitive(message)}")
                 await ws.send_text(message)
 
     async def send_personal_message(self, client_id: str, message: str):
