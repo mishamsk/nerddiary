@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from io import BytesIO
 
@@ -93,7 +94,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                     method="unlock_session", user_id=session.user_id, password=event.message.message
                 )
 
-                if res != "True":
+                if res is not True:
                     await event.respond(SERVER_ERROR)
                     return
             elif session.user_status == UserSessionStatus.LOCKED:
@@ -109,7 +110,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                         await event.respond(START_LOCKED_INCORRECT_PASSWORD)
                         return
 
-                if res != "True":
+                if res is not True:
                     await event.respond(SERVER_ERROR)
                     return
 
@@ -133,10 +134,39 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
                 else:
                     raise events.StopPropagation
 
+            polls: List[Dict[str, Any]] = json.loads(
+                await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
+            )
+
+        if polls:
+            peer = await bot.bot.get_input_entity(event.sender_id)
+            commands = await bot.bot(
+                functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=peer), lang_code="")
+            )
+
+            if not commands:
+                commands = await bot.bot(
+                    functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code="")
+                )
+
+            for poll in polls:
+                poll = PollBaseSchema.parse_obj(poll)
+                commands.append(types.BotCommand(command=poll.command, description=poll.description or poll.poll_name))
+
+            await bot.bot(
+                functions.bots.SetBotCommandsRequest(
+                    scope=types.BotCommandScopePeer(peer=peer),
+                    lang_code="",
+                    commands=commands,
+                )
+            )
+
+        await event.respond(START_CONFIGURED)
+
     @bot.bot.on(
         events.NewMessage(
             chats=bot.config.ALLOWED_USERS,
-            pattern=r"^[^\/].*",
+            pattern=r"^[^\/]*",
             func=lambda e: bot.get_expected_message(str(e.sender_id)) == ROUTE_CONFIGURATION_PROMPT,
         )
     )
@@ -160,21 +190,33 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
         await bot.bot.download_media(event.message, file=config)
 
         try:
-            await bot.ndc.exec_api_method(
+            res = await bot.ndc.exec_api_method(
                 method="set_config", user_id=session.user_id, config=config.getvalue().decode()
             )
         except RPCError:
             await event.respond(START_UNLOCKED_CONFIG_INCORRECT)
             return
 
+        if res is not True:
+            await event.respond(SERVER_ERROR)
+            return
+
         bot.clear_expected_message_route(str(event.sender_id), ROUTE_CONFIGURATION_PROMPT)
 
-        polls: List[Dict[str, Any]] = await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
+        polls: List[Dict[str, Any]] = json.loads(
+            await bot.ndc.exec_api_method(method="get_polls", user_id=session.user_id)
+        )
 
         if polls:
+            peer = await bot.bot.get_input_entity(event.sender_id)
             commands = await bot.bot(
-                functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code="en")
+                functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=peer), lang_code="")
             )
+
+            if not commands:
+                commands = await bot.bot(
+                    functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code="")
+                )
 
             for poll in polls:
                 poll = PollBaseSchema.parse_obj(poll)
@@ -182,8 +224,8 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
 
             await bot.bot(
                 functions.bots.SetBotCommandsRequest(
-                    scope=types.BotCommandScopePeer(peer=await event.get_input_chat()),
-                    lang_code="en",
+                    scope=types.BotCommandScopePeer(peer=peer),
+                    lang_code="",
                     commands=commands,
                 )
             )

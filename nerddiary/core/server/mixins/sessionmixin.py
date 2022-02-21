@@ -41,7 +41,7 @@ class SessionMixin:
         if not await ses.unlock(pass_or_key):
             return Error(RPCErrors.SESSION_INCORRECT_PASSWORD_OR_KEY, "Incorrect password or key")
 
-        return Success(str(True))
+        return Success(True)
 
     @method  # type:ignore
     async def set_config(self: ServerProtocol, user_id: str, config: str) -> Result:

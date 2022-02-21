@@ -71,7 +71,7 @@ class StringSessionSpawner(SessionSpawner):
 
         if session._data_connection:
             if session._user_config:
-                session._data_connection.store_config(session._user_config.json())
+                session._data_connection.store_config(session._user_config.json(exclude_unset=True, ensure_ascii=False))
 
         session_file_path.write_bytes(session.json(exclude_unset=True).encode())
 

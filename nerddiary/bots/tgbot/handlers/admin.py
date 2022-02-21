@@ -16,7 +16,7 @@ async def init(bot: NerdDiaryTGBot, logger: logging.Logger):
     # Add admin commands
     logger.debug("Adding admin bot commands")
     to_add = []
-    commands = await bot.bot(functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code="en"))
+    commands = await bot.bot(functions.bots.GetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code=""))
 
     commands.append(types.BotCommand(command="reload_ndc", description="Reload NDC"))
     commands.append(types.BotCommand(command="debug_info", description="Debug Info"))

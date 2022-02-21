@@ -1,14 +1,16 @@
 import asyncio
 import logging
 
+from nerddiary.core.asynctools.asyncapp import AsyncApplication
+from nerddiary.core.client import NerdDiaryClient, NotificationType, UserSessionSchema, UserSessionStatus
+
+from pydantic import ValidationError
 from telethon import TelegramClient, functions, types
 
-from ...core.asynctools.asyncapp import AsyncApplication
-from ...core.client.client import NerdDiaryClient
 from . import handlers
 from .config import NerdDiaryTGBotConfig
 
-from typing import Dict
+from typing import Any, Dict
 
 
 class NerdDiaryTGBot(AsyncApplication):
@@ -65,6 +67,22 @@ class NerdDiaryTGBot(AsyncApplication):
         else:
             return False
 
+    async def _notification_callback(self, notification: NotificationType, raw_ses: Dict[str, Any]):
+        self._logger.debug(f"Processing notification type {notification}")
+
+        match notification:
+            case NotificationType.SESSION_UPDATE:
+                self._logger.debug("Recieved session update. Processing")
+
+                try:
+                    ses = UserSessionSchema.parse_obj(raw_ses)
+
+                    if ses.user_status == UserSessionStatus.CONFIGURED:
+                        # TODO: theoretically, we need to check if bot commands are not set and add them. but this may only happen for first time telegram user coming from a different client. sometime...
+                        return
+                except ValidationError:
+                    pass
+
     async def _astart(self):
         self._logger.debug("Starting NerdDiary TG Bot")
         asyncio.create_task(self._ndc.astart())
@@ -79,7 +97,7 @@ class NerdDiaryTGBot(AsyncApplication):
         await self.bot(
             functions.bots.SetBotCommandsRequest(
                 scope=types.BotCommandScopeDefault(),
-                lang_code="en",
+                lang_code="",
                 commands=commands,
             )
         )

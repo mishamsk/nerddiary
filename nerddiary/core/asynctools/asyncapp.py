@@ -157,7 +157,10 @@ class AsyncApplication(abc.ABC):
                 self._logger.debug("Restoring SIGINT handler and re-raising SIGINT")
                 signal.signal(signal.SIGINT, old_sigint_handler)
                 raise KeyboardInterrupt()
-
+        except Exception:
+            self._logger.exception("Uncaught exception in <_aclose> method")
+            self._closing = False
+            return False
         finally:
             if not hit_sigint:
                 self._logger.debug("Restoring SIGINT handler")

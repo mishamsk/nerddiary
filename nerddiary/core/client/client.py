@@ -13,7 +13,7 @@ from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse
 from pydantic import ValidationError
 from websockets import client
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK, InvalidMessage
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..client.config import NerdDiaryClientConfig
@@ -27,6 +27,8 @@ import typing as t
 class NerdDiaryClient(AsyncApplication):
     def __init__(
         self,
+        notification_callback: t.Callable[[NotificationType, t.Dict[str, t.Any]], t.Coroutine[t.Any, t.Any, None]]
+        | None = None,
         *,
         config: NerdDiaryClientConfig = NerdDiaryClientConfig(),
         loop: asyncio.AbstractEventLoop = None,
@@ -42,6 +44,7 @@ class NerdDiaryClient(AsyncApplication):
         self._message_dispatcher: asyncio.Task | None = None
         self._rpc_calls: t.Dict[uuid.UUID, AsyncRPCResult] = {}
         self._sessions: t.Dict[str, UserSessionSchema] = {}
+        self._notification_callback = notification_callback
 
     async def _astart(self):
         self._logger.debug("Starting NerdDiary client")
@@ -95,7 +98,13 @@ class NerdDiaryClient(AsyncApplication):
                 except ConnectionResetError:
                     await asyncio.sleep(self._config.reconnect_timeout)
                     retry += 1
+                except InvalidMessage:
+                    await asyncio.sleep(self._config.reconnect_timeout)
+                    retry += 1
                 except OSError:
+                    await asyncio.sleep(self._config.reconnect_timeout)
+                    retry += 1
+                except EOFError:
                     await asyncio.sleep(self._config.reconnect_timeout)
                     retry += 1
                 except Exception:
@@ -144,10 +153,9 @@ class NerdDiaryClient(AsyncApplication):
                 if not await self._connect():
                     return
             except Exception:
-                err = "Unexpected exception while sending rpc call. Closing client"
+                err = "Unexpected exception while sending rpc call."
                 self._logger.exception(err)
-                await self.aclose()
-                return
+                raise RuntimeError(err)
 
         try:
             self._logger.debug(
@@ -161,17 +169,14 @@ class NerdDiaryClient(AsyncApplication):
         except RPCError:
             raise
         except Exception:
-            err = "Unexpected exception while waiting for rpc call result. Closing client"
+            err = "Unexpected exception while waiting for rpc call result"
             self._logger.exception(err)
-            await self.aclose()
-            return
+            raise RuntimeError(err)
         finally:
             self._rpc_calls.pop(id)
 
     async def _message_dispatch(self):
         self._logger.debug("Starting message dispatcher")
-
-        has_raised = False
 
         while self._running:
             try:
@@ -185,35 +190,38 @@ class NerdDiaryClient(AsyncApplication):
                         n_type = NotificationType(int(parsed_response["notification"]))
                     except ValueError:
                         n_type = -1
+
                     match n_type:
-                        case NotificationType.CLIENT_CONNECTED:
-                            self._logger.debug(f"Recieved <{n_type.name}> notification. Ignoring")
-                        case NotificationType.CLIENT_DISCONNECTED:
-                            self._logger.debug(f"Recieved <{n_type.name}> notification. Ignoring")
-                        case NotificationType.SESSION_UPDATE:
-                            self._logger.debug(f"Recieved <{n_type.name}> notification. Processing")
-                            await self._process_session_update(parsed_response["data"])
-                        case _:
+                        case -1:
                             self._logger.debug(
                                 f"Recieved unsupported notification <{parsed_response['notification']}>. Ignoring"
                             )
+                        case NotificationType.SESSION_UPDATE:
+                            self._logger.debug("Recieved session update. Processing")
+                            asyncio.create_task(self._process_session_update(parsed_response["data"]))
+                            if self._notification_callback:
+                                asyncio.create_task(self._notification_callback(n_type, parsed_response["data"]))
+                        case _:
+                            self._logger.debug(f"Recieved <{n_type.name}> notification. Processing")
+                            if self._notification_callback:
+                                asyncio.create_task(self._notification_callback(n_type, parsed_response["data"]))
                 else:
                     # Process RPC call response
                     match parse(parsed_response):
                         case Ok(result, id):
                             self._logger.debug(
-                                f"Processing RPC call response from the server. Result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
+                                f"RPC call response succesful with result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
                             )
                             if id not in self._rpc_calls:
                                 self._logger.warning(
-                                    f"RPC call response came too late from the server. Result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
+                                    f"RPC call response came too late and will be ignored. Result <{mask_sensitive(str(result))}>. JSON RPC id: {id}"
                                 )
                                 continue
 
                             self._rpc_calls[id]._fut.set_result(result)
                         case Error(code, message, data, id):
                             logging.error(
-                                f"Processing RPC call response from the server. Got error {code=} {message=} data={mask_sensitive(str(data))}. JSON RPC id: {id}"
+                                f"RPC call unsuccesful. Got error {code=} {message=} data={mask_sensitive(str(data))}. JSON RPC id: {id}"
                             )
                             if id not in self._rpc_calls:
                                 self._logger.warning("RPC call response came too late from the server")
@@ -229,13 +237,9 @@ class NerdDiaryClient(AsyncApplication):
             except asyncio.CancelledError:
                 break
             except Exception:
-                err = "Unexpected exception during message dispatching. Closing client"
+                err = "Unexpected exception during message dispatching."
                 self._logger.exception(err)
-                has_raised = True
-                break
-
-        if has_raised:
-            await self.aclose()
+                continue
 
     def _stop(self):
         self._running = False
