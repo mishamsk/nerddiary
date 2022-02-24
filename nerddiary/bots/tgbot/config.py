@@ -4,7 +4,7 @@ import logging
 
 from pydantic import AnyUrl, BaseSettings, DirectoryPath, Field, SecretStr, validator
 
-from typing import List, Optional
+from typing import Set
 
 logger = logging.getLogger("nerddiary.tgbot.config")
 
@@ -17,8 +17,8 @@ class NerdDiaryTGBotConfig(BaseSettings):
     SESSION_NAME: str = Field(default="nerddy")
     SESSION_PATH: DirectoryPath = Field(default="./")
     SERVER: AnyUrl | None = Field(default=None)
-    ADMINS: List[int] = Field(min_items=1)
-    ALLOWED_USERS: Optional[List[int]] = Field(min_items=1)
+    ADMINS: Set[int] = Field(min_items=1)
+    ALLOWED_USERS: Set[int] = Field(min_items=1)
     SESSION_UPDATE_TIMEOUT: float = 5
 
     @validator("SERVER")
