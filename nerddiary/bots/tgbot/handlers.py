@@ -37,13 +37,11 @@ logger = logging.getLogger("nerddiary.bot")
 
 
 def update_handler(send_typing: bool = False) -> Callable:
-    """ Decorator for update handlers: resolves context for message updates, logs debug messages & supports sending typing chat action"""
+    """Decorator for update handlers: resolves context for message updates, logs debug messages & supports sending typing chat action"""
 
     def decorator(func):
         @wraps(func)
-        def wrapped(
-            update: Update, context: CallbackContext, *args, **kwargs
-        ) -> str | int | None:
+        def wrapped(update: Update, context: CallbackContext, *args, **kwargs) -> str | int | None:
 
             assert update is not None
             assert context.job is None
@@ -55,15 +53,11 @@ def update_handler(send_typing: bool = False) -> Callable:
                 message_context = chat_context.active_messages.get(update.effective_message.message_id, None)
 
             if message_context:
-                message_context.from_callback = (
-                    True if update.callback_query is not None else False
-                )
+                message_context.from_callback = True if update.callback_query is not None else False
 
             # Sending typing action if needed
             if send_typing:
-                context.bot.send_chat_action(
-                    chat_id=update.effective_message.chat_id, action=ChatAction.TYPING
-                )
+                context.bot.send_chat_action(chat_id=update.effective_message.chat_id, action=ChatAction.TYPING)
 
             # Log all resolved contexts
             logger.debug(
@@ -78,9 +72,7 @@ def update_handler(send_typing: bool = False) -> Callable:
             )
 
             if result and isinstance(result, PollState):
-                logger.debug(
-                    f"Handler <{func.__name__}> returned new state: {result.name}. Exiting..."
-                )
+                logger.debug(f"Handler <{func.__name__}> returned new state: {result.name}. Exiting...")
             else:
                 logger.debug(f"Handler <{func.__name__}> returned: {result}. Exiting...")
 
@@ -96,9 +88,7 @@ def handler(send_typing: bool = False) -> Callable:
 
     def decorator(func):
         @wraps(func)
-        def wrapped(
-            *args, **kwargs
-        ) -> str | int | None:
+        def wrapped(*args, **kwargs) -> str | int | None:
 
             # case [Update() as update, CallbackContext() as context, ChatContext() as chat_context, ActivePollContext() as active_poll_context, ChatJobContext() as job_context
 
@@ -113,13 +103,25 @@ def handler(send_typing: bool = False) -> Callable:
                 # ----------- Handling jobs -----------
 
                 # New poll start job
-                case [CallbackContext(job=Job(context=NewPollJobContext(chat_context=_ as chat_context) as job_context)) as context]:
+                case [
+                    CallbackContext(
+                        job=Job(context=NewPollJobContext(chat_context=_ as chat_context) as job_context)
+                    ) as context
+                ]:
                     logger.debug(
                         f"Processing new poll job using <{func.__name__}> handler, with send_typing set to {str(send_typing)}"
                     )
 
                 # Active poll delay job
-                case [CallbackContext(job=Job(context=ActivePollJobContext(active_poll=_ as message_context, chat_context=_ as chat_context) as job_context)) as context]:
+                case [
+                    CallbackContext(
+                        job=Job(
+                            context=ActivePollJobContext(
+                                active_poll=_ as message_context, chat_context=_ as chat_context
+                            ) as job_context
+                        )
+                    ) as context
+                ]:
                     logger.debug(
                         f"Processing active poll delay job using <{func.__name__}> handler, with send_typing set to {str(send_typing)}"
                     )
@@ -131,7 +133,10 @@ def handler(send_typing: bool = False) -> Callable:
                 # ----------- Handling updates -----------
 
                 # Same logic for commands, callback_queries and messages
-                case [Update() as update, CallbackContext(job=None, chat_data={ContextKey.CHAT_CONTEXT: _ as chat_context}) as context]:
+                case [
+                    Update() as update,
+                    CallbackContext(job=None, chat_data={ContextKey.CHAT_CONTEXT: _ as chat_context}) as context,
+                ]:
                     logger.debug(
                         f"Processing update using <{func.__name__}> handler, with send_typing set to {str(send_typing)}"
                     )
@@ -139,9 +144,7 @@ def handler(send_typing: bool = False) -> Callable:
                     message_context = chat_context.active_messages.get(update.effective_message.message_id, None)
 
                     if message_context:
-                        message_context.from_callback = (
-                            True if update.callback_query is not None else False
-                        )
+                        message_context.from_callback = True if update.callback_query is not None else False
 
                 # First message with a user, need to create a chat_context
                 case [Update() as update, CallbackContext(job=None, chat_data={}, dispatcher=_ as dp) as context]:
@@ -167,9 +170,7 @@ def handler(send_typing: bool = False) -> Callable:
                     message_context = chat_context.active_messages.get(update.effective_message.message_id, None)
 
                     if message_context:
-                        message_context.from_callback = (
-                            True if update.callback_query is not None else False
-                        )
+                        message_context.from_callback = True if update.callback_query is not None else False
 
                 # ----------- End Handling updates -----------
 
@@ -190,9 +191,7 @@ def handler(send_typing: bool = False) -> Callable:
 
             # Sending typing action if needed
             if send_typing:
-                context.bot.send_chat_action(
-                    chat_id=update.effective_message.chat_id, action=ChatAction.TYPING
-                )
+                context.bot.send_chat_action(chat_id=update.effective_message.chat_id, action=ChatAction.TYPING)
 
             # Log all resolved contexts
             logger.debug(
@@ -208,9 +207,7 @@ def handler(send_typing: bool = False) -> Callable:
             )
 
             if result and isinstance(result, PollState):
-                logger.debug(
-                    f"Handler <{func.__name__}> returned new state: {result.name}. Exiting..."
-                )
+                logger.debug(f"Handler <{func.__name__}> returned new state: {result.name}. Exiting...")
             else:
                 logger.debug(f"Handler <{func.__name__}> returned: {result}. Exiting...")
 
@@ -239,7 +236,11 @@ def process_select(
     # Matching and capturing within match patterns when possible
     match [update, job_context, message_context]:
         # One of the questions in between
-        case [Update(callback_query=CallbackQuery()), None, ActivePollContext(poll_workflow=BotWorkflow(started=True) as workflow) as active_poll_context]:
+        case [
+            Update(callback_query=CallbackQuery()),
+            None,
+            ActivePollContext(poll_workflow=BotWorkflow(started=True) as workflow) as active_poll_context,
+        ]:
             # Prevent processing duplicate clicks
             if update.callback_query.data not in workflow.get_select():
                 logger.warn(
@@ -253,9 +254,7 @@ def process_select(
         case _:
             raise NotImplementedError("Unknown context passed to `process_select`")
 
-    not_delayed = active_poll_context.poll_workflow.add_answer(
-        update.callback_query.data
-    )
+    not_delayed = active_poll_context.poll_workflow.add_answer(update.callback_query.data)
 
     if not_delayed:
         return ask_next_value(
@@ -305,9 +304,7 @@ def confirm_row(
 
     # Check row is being processed already
     if not isinstance(message_context, ActivePollContext):
-        raise ValueError(
-            "Handler <confirm_row> called out of order - current row is not set"
-        )
+        raise ValueError("Handler <confirm_row> called out of order - current row is not set")
 
     if update.callback_query.data == KeyboardRowSaveCancel.BUTTON_CONFIRM_ROW[0]:
         # Prepare reply
@@ -317,9 +314,7 @@ def confirm_row(
         keyboard = None
 
         update.callback_query.answer()
-        update.callback_query.edit_message_text(
-            text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML
-        )
+        update.callback_query.edit_message_text(text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
         # Commit row
         dpr: DataConnection = chat_context.data_connection
@@ -328,15 +323,15 @@ def confirm_row(
 
         # Prepare reply
         if result:
-            chat_context.poll_last_timestamps[message_context.poll_key] = message_context.poll_workflow.poll_start_timestamp
+            chat_context.poll_last_timestamps[
+                message_context.poll_key
+            ] = message_context.poll_workflow.poll_start_timestamp
 
             text = BotStrings.NEW_ROW_RECORDED + "\n" + "\n".join(original_text)
         else:
             text = BotStrings.NEW_ROW_RECORDING_FAILED + "\n" + "\n".join(original_text)
 
-        update.callback_query.edit_message_text(
-            text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML
-        )
+        update.callback_query.edit_message_text(text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
         # Clear up current record context
         del chat_context.active_messages[message_context.message_id]
@@ -344,13 +339,7 @@ def confirm_row(
         return ConversationHandler.END
     else:
         message_context.reset_workflow()
-        return ask_next_value(
-            update,
-            context,
-            chat_context,
-            message_context,
-            job_context
-        )
+        return ask_next_value(update, context, chat_context, message_context, job_context)
 
 
 @handler()
@@ -388,9 +377,7 @@ def timeout(
     del chat_context.active_messages[message_context.message_id]
 
     if message_context.delay_job_context:
-        botjob.dispose_chat_job(
-            context.job_queue, message_context.delay_job_context  # type: ignore
-        )
+        botjob.dispose_chat_job(context.job_queue, message_context.delay_job_context)  # type: ignore
 
     return ConversationHandler.END
 
@@ -482,23 +469,37 @@ def ask_next_value(
                 if last_timestamp and last_timestamp.date() == adjusted_date.date():
                     return None
 
-            workflow = BotWorkflow(
-                poll_config, chat_context.config
-            )
+            workflow = BotWorkflow(poll_config, chat_context.config)
         # From delay
-        case [None, ActivePollJobContext() as job_context, ActivePollContext(message_id=_ as message_id, poll_workflow=BotWorkflow() as workflow) as active_poll_context]:
+        case [
+            None,
+            ActivePollJobContext() as job_context,
+            ActivePollContext(
+                message_id=_ as message_id, poll_workflow=BotWorkflow() as workflow
+            ) as active_poll_context,
+        ]:
             pass
         # From re-starting the poll (`confirm_row`)
-        case [Update(), None, ActivePollContext(message_id=_ as message_id, poll_workflow=BotWorkflow(started=False) as workflow) as active_poll_context]:
+        case [
+            Update(),
+            None,
+            ActivePollContext(
+                message_id=_ as message_id, poll_workflow=BotWorkflow(started=False) as workflow
+            ) as active_poll_context,
+        ]:
             pass
         # New poll starting from command
         case [Update(), None, NewPollContext(poll_key=_ as poll_key)]:
             poll_config = chat_context.config.polls[poll_key]
-            workflow = BotWorkflow(
-                poll_config, chat_context.config
-            )
+            workflow = BotWorkflow(poll_config, chat_context.config)
         # One of the questions in between
-        case [Update(callback_query=CallbackQuery()), None, ActivePollContext(message_id=_ as message_id, poll_workflow=BotWorkflow(started=True) as workflow) as active_poll_context]:
+        case [
+            Update(callback_query=CallbackQuery()),
+            None,
+            ActivePollContext(
+                message_id=_ as message_id, poll_workflow=BotWorkflow(started=True) as workflow
+            ) as active_poll_context,
+        ]:
             # Prevent processing duplicate clicks
             if update.callback_query.data not in workflow.get_select():
                 logger.warn(
@@ -516,9 +517,7 @@ def ask_next_value(
 
     if workflow.all_set:
         text = BotStrings.NEW_ROW_FINISHED
-        text += "\n" + tg_pretty_print_answers(
-            questions=workflow.questions, answers=workflow.answers
-        )
+        text += "\n" + tg_pretty_print_answers(questions=workflow.questions, answers=workflow.answers)
 
         keyboard = generate_buttons(
             [
@@ -574,9 +573,7 @@ def ask_next_value(
 
     # New poll, no message yet. From command
     else:
-        msg = update.message.reply_text(
-            text, reply_markup=keyboard, parse_mode=ParseMode.HTML
-        )
+        msg = update.message.reply_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
         message_id = msg.message_id
 
@@ -587,12 +584,7 @@ def ask_next_value(
 
 
 @update_handler()
-def start(
-    update: Update,
-    context: CallbackContext,
-    chat_context: ChatContext,
-    message_context: MessageContext
-) -> None:
+def start(update: Update, context: CallbackContext, chat_context: ChatContext, message_context: MessageContext) -> None:
     logger.debug(
         f"Processing start command for user id: {update.effective_user.id}; user name: {update.effective_user.username} "
     )
@@ -609,9 +601,7 @@ def start(
 
         user = bot_users[chat_id]
         if user.encrypt_data:
-            msg = update.message.reply_text(
-                text, reply_markup=keyboard, parse_mode=ParseMode.HTML
-            )
+            msg = update.message.reply_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
         else:
             # No encryption, can create context & schedule jobs right away
             text = ""
@@ -624,16 +614,14 @@ def start(
             else:
                 text = BotStrings.START_EXISTING_USER_WELCOME
 
-            update.message.reply_text(
-                text, reply_markup=None
-            )
+            update.message.reply_text(text, reply_markup=None)
 
             chat_context = ChatContext(
                 chat_id=chat_id,
                 config=bot_users[chat_id],
                 username=update.effective_user.username,
                 job_queue=dp.job_queue,
-                data_connection=bot_config._data_provider.get_connection(user)
+                data_connection=bot_config._data_provider.get_connection(user),
             )
 
             context.chat_data[ContextKey.CHAT_CONTEXT] = chat_context
@@ -680,9 +668,7 @@ def reload_user_poll_jobs(
         try:
             text = BotStrings.START_REALOD_POLL_REMINDERS
 
-            message = bot.send_message(
-                chat_id=config.id, text=text, reply_markup=ReplyKeyboardRemove()
-            )
+            message = bot.send_message(chat_id=config.id, text=text, reply_markup=ReplyKeyboardRemove())
 
             username = message.chat.username
         except Unauthorized:
@@ -698,7 +684,9 @@ def reload_user_poll_jobs(
             commands.append(
                 (
                     poll.command,
-                    BotStrings.START_POLL_COMMAND_DESCRIPTION.format(poll.description if poll.description else poll.poll_name),
+                    BotStrings.START_POLL_COMMAND_DESCRIPTION.format(
+                        poll.description if poll.description else poll.poll_name
+                    ),
                     start_poll,
                 )
             )
@@ -741,9 +729,9 @@ def reload_user_poll_jobs(
                     callback=ask_next_value,
                     job_queue=job_queue,
                     job_context=job_context,
-                    time=(
-                        datetime.datetime.now(config.timezone) + datetime.timedelta(seconds=60)
-                    ).time().replace(tzinfo=config.timezone),
+                    time=(datetime.datetime.now(config.timezone) + datetime.timedelta(seconds=60))
+                    .time()
+                    .replace(tzinfo=config.timezone),
                 )
             else:
                 botjob.run_daily(
@@ -759,9 +747,7 @@ def reload_user_poll_jobs(
             )
 
             if poll.description:
-                text += "\n\n" + BotStrings.START_POLL_REMINDER_SET_DESCRIPTION.format(
-                    poll.description
-                )
+                text += "\n\n" + BotStrings.START_POLL_REMINDER_SET_DESCRIPTION.format(poll.description)
 
             bot.send_message(chat_id=config.id, text=text)
 
@@ -788,7 +774,9 @@ def reload_user_jobs(
             commands.append(
                 (
                     poll.command,
-                    BotStrings.START_POLL_COMMAND_DESCRIPTION.format(poll.description if poll.description else poll.poll_name),
+                    BotStrings.START_POLL_COMMAND_DESCRIPTION.format(
+                        poll.description if poll.description else poll.poll_name
+                    ),
                     start_poll,
                 )
             )
@@ -808,9 +796,9 @@ def reload_user_jobs(
                     callback=ask_next_value,
                     job_queue=dp.job_queue,
                     job_context=job_context,
-                    time=(
-                        datetime.datetime.now(user.timezone) + datetime.timedelta(seconds=10)
-                    ).time().replace(tzinfo=user.timezone),
+                    time=(datetime.datetime.now(user.timezone) + datetime.timedelta(seconds=10))
+                    .time()
+                    .replace(tzinfo=user.timezone),
                 )
             else:
                 botjob.run_daily(
@@ -826,9 +814,7 @@ def reload_user_jobs(
             )
 
             if poll.description:
-                text += "\n\n" + BotStrings.START_POLL_REMINDER_SET_DESCRIPTION.format(
-                    poll.description
-                )
+                text += "\n\n" + BotStrings.START_POLL_REMINDER_SET_DESCRIPTION.format(poll.description)
 
             dp.bot.send_message(chat_id=user.id, text=text)
 
