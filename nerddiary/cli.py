@@ -65,30 +65,6 @@ def cli(
 
 
 try:
-    from nerddiary.bots.tgbot.bot import NerdDiaryTGBot
-
-    logger.debug("Found TG Bot module. Creating Bot CLI")
-
-    @cli.command()
-    @click.pass_context
-    def bot(ctx: click.Context) -> None:
-
-        interactive = ctx.parent.params["interactive"]  # type: ignore
-
-        if interactive:
-            click.echo(click.style("Starting the bot!", fg="green"))
-
-        try:
-            NerdDiaryTGBot().run()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            logger.info("Bot was stopped")
-
-except ImportError:
-    logger.debug("TG Bot module doesn't exist. Skipping")
-
-try:
     # TODO: make a better detection mechanism
     from fastapi import APIRouter  # noqa:F401
 
@@ -123,7 +99,7 @@ try:
         try:
             # TODO: Separate development config with reload from normal cli
             uvicorn.run(
-                "nerddiary.core.server.main:app",
+                "nerddiary.server.main:app",
                 host="0.0.0.0",
                 reload=reload,
                 reload_dirs=["nerddiary"],

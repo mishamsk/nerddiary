@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nerddiary.core.server.session.status import UserSessionStatus
+from nerddiary.server.session.status import UserSessionStatus
 
 from jsonrpcserver import Error, InvalidParams, Result, Success, method
 

@@ -1,7 +1,7 @@
 import signal
 from time import sleep
 
-from nerddiary.core.asynctools.delayedsignal import DelayedKeyboardInterrupt
+from nerddiary.asynctools.delayedsignal import DelayedKeyboardInterrupt
 
 
 def run():

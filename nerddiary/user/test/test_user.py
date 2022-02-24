@@ -1,5 +1,5 @@
-from nerddiary.core.poll.poll import Poll
-from nerddiary.core.user.user import User
+from nerddiary.poll.poll import Poll
+from nerddiary.user.user import User
 
 import pytest
 import pytz

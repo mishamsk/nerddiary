@@ -1,6 +1,6 @@
 import datetime
 
-from nerddiary.core.poll.poll import Poll
+from nerddiary.poll.poll import Poll
 
 import pytest
 from pydantic import ValidationError

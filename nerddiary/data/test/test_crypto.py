@@ -1,4 +1,4 @@
-from nerddiary.core.data.crypto import EncryptionProdiver
+from nerddiary.data.crypto import EncryptionProdiver
 
 import pytest
 from cryptography.fernet import InvalidToken

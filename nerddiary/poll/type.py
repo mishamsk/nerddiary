@@ -15,7 +15,7 @@ from ..primitive.valuelabel import ValueLabel
 import typing as t
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from nerddiary.core.user.user import User
+    from nerddiary.user.user import User
 
 logger = logging.getLogger(__name__)
 

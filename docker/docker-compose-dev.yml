@@ -15,17 +15,3 @@ services:
       - ./../nerddiary:/app/nerddiary
     ports:
       - 8880:80
-
-  tgbot:
-    build:
-      context: ./../
-      args:
-        extras: tgbot
-      dockerfile: ./docker/Dockerfile
-    tty: true
-    container_name: nerddiary-tgbot
-    command: nerddiary --log-level DEBUG --log-file /app/log/tgbot.log bot
-    volumes:
-      - ./../devplayground/:/app/log
-      - ./../devplayground/:/app/data
-      - ./../nerddiary:/app/nerddiary

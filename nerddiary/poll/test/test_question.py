@@ -1,7 +1,7 @@
 from datetime import timedelta
 
-from nerddiary.core.poll.question import Question
-from nerddiary.core.poll.type import DependantSelectType, TimestampType
+from nerddiary.poll.question import Question
+from nerddiary.poll.type import DependantSelectType, TimestampType
 
 import pytest
 from pydantic import ValidationError

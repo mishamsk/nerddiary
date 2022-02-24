@@ -4,8 +4,8 @@ import random
 import time
 from pathlib import Path
 
-from nerddiary.core.data.crypto import EncryptionProdiver
-from nerddiary.core.data.data import (
+from nerddiary.data.crypto import EncryptionProdiver
+from nerddiary.data.data import (
     DataConnection,
     DataCorruptionError,
     DataCorruptionType,
@@ -15,7 +15,7 @@ from nerddiary.core.data.data import (
     SQLLiteProvider,
     SQLLiteProviderParams,
 )
-from nerddiary.core.user.user import User
+from nerddiary.user.user import User
 
 import pytest
 import sqlalchemy as sa

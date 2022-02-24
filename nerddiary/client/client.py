@@ -6,8 +6,8 @@ import logging
 import uuid
 from contextlib import suppress
 
-from nerddiary.core.server.rpc import RPCErrors
-from nerddiary.core.server.session.status import UserSessionStatus
+from nerddiary.server.rpc import RPCErrors
+from nerddiary.server.session.status import UserSessionStatus
 
 from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse

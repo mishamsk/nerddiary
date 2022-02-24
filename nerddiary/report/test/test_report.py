@@ -1,4 +1,4 @@
-from nerddiary.core.report.report import Report
+from nerddiary.report.report import Report
 
 
 class TestReport:

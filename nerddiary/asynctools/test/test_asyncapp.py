@@ -5,7 +5,7 @@ import logging
 import signal
 from pathlib import Path
 
-from nerddiary.core.asynctools.asyncapp import AsyncApplication
+from nerddiary.asynctools.asyncapp import AsyncApplication
 
 import pytest
 
