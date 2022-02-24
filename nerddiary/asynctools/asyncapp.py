@@ -19,8 +19,8 @@ class AsyncApplication(abc.ABC):
     def __init__(
         self,
         *,
-        loop: asyncio.AbstractEventLoop = None,
-        logger: logging.Logger = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        logger: logging.Logger | None = None,
     ):
         self._loop: asyncio.AbstractEventLoop | None = loop
         self._logger = logger or logging.getLogger(self.__class__.__name__)
