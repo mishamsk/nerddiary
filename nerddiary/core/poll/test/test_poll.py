@@ -62,7 +62,7 @@ class TestPoll:
         assert p.questions[1]._order == 1
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        nj = p.json(ensure_ascii=False)
         assert Poll.parse_raw(nj) == p
 
         json = """
@@ -118,7 +118,7 @@ class TestPoll:
         assert p.questions[2]._order == 2
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        nj = p.json(ensure_ascii=False)
         assert Poll.parse_raw(nj) == p
 
         json = """
@@ -142,7 +142,7 @@ class TestPoll:
         assert p.command is None
 
         # Check serialization / de-serialization
-        nj = p.json(exclude_unset=True, ensure_ascii=False)
+        nj = p.json(ensure_ascii=False)
         assert Poll.parse_raw(nj) == p
 
     def test_validations(self):

@@ -109,7 +109,7 @@ class TestUser:
         assert u.polls[0].reminder_time.tzinfo == u.timezone
 
         # Check serialization / de-serialization
-        nj = u.json(exclude_unset=True, ensure_ascii=False)
+        nj = u.json(ensure_ascii=False)
         assert User.parse_raw(nj) == u
 
         json = """
@@ -128,7 +128,7 @@ class TestUser:
         assert not u.reports
 
         # Check serialization / de-serialization
-        nj = u.json(exclude_unset=True, ensure_ascii=False)
+        nj = u.json(ensure_ascii=False)
         assert User.parse_raw(nj) == u
 
     def test_validations(self):

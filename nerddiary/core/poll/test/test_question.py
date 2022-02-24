@@ -45,7 +45,7 @@ class TestQuestion:
         assert "YesYes" in q._type.get_possible_values()
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        nj = q.json(ensure_ascii=False)
         assert Question.parse_raw(nj) == q
 
         json = """
@@ -69,7 +69,7 @@ class TestQuestion:
         assert q._order == -1
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        nj = q.json(ensure_ascii=False)
         assert Question.parse_raw(nj) == q
 
         json = """
@@ -104,7 +104,7 @@ class TestQuestion:
         assert q.delay_on == ["NoNo"]
 
         # Check serialization / de-serialization
-        nj = q.json(exclude_unset=True, ensure_ascii=False)
+        nj = q.json(ensure_ascii=False)
         assert Question.parse_raw(nj) == q
 
     def test_validations(self):

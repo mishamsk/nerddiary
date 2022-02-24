@@ -86,7 +86,7 @@ class Question(BaseModel):
         else:
             type = values["type"]
 
-        if type:
+        if type and v:
             pos_values = type.get_possible_values()
             if not isinstance(pos_values, list):
                 raise ValueError(f"`dalay_on` value is not compatible with <{type.type}>")
