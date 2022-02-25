@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from nerddiary.server.session.status import UserSessionStatus
 
 from jsonrpcserver import Error, InvalidParams, Result, Success, method
@@ -19,10 +21,16 @@ class SessionMixin:
         if not ses:
             return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
 
-        return Success(UserSessionSchema(user_id=ses.user_id, user_status=ses.user_status).json(exclude_unset=True))
+        ret = {
+            "schema": "UserSessionSchema",
+            "data": UserSessionSchema(user_id=ses.user_id, user_status=ses.user_status).dict(exclude_unset=True),
+        }
+        return Success(json.dumps(ret))
 
     @method  # type:ignore
-    async def unlock_session(self: ServerProtocol, user_id: str, password: str = None, key: str = None) -> Result:
+    async def unlock_session(
+        self: ServerProtocol, user_id: str, password: str | None = None, key: str | None = None
+    ) -> Result:
         self._logger.debug("Processing RPC call")
 
         ses = await self._sessions.get(user_id)

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from nerddiary.server.session.status import UserSessionStatus
+import json
 
 from jsonrpcserver import Error, Result, Success, method
 
 from ..proto import ServerProtocol
 from ..rpc import RPCErrors
-from ..schema import PollBaseSchema
+from ..schema import PollBaseSchema, PollsSchema
+from ..session.status import UserSessionStatus
 
 
 class PollMixin:
@@ -22,15 +23,17 @@ class PollMixin:
         if not ses.user_status >= UserSessionStatus.CONFIGURED:
             return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
 
-        ret = []
+        polls = []
         if ses._user_config.polls:
             for poll in ses._user_config.polls:
-                ret.append(
+                polls.append(
                     PollBaseSchema(poll_name=poll.poll_name, command=poll.command, description=poll.description).json(
                         exclude_unset=True
                     )
                 )
 
-            return Success("[" + ",".join(ret) + "]")
-        else:
-            return Success("[]")
+        ret = {
+            "schema": "PollsSchema",
+            "data": PollsSchema(polls=polls).dict(exclude_unset=True),
+        }
+        return Success(json.dumps(ret))

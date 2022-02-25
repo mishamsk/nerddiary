@@ -6,9 +6,6 @@ import logging
 import uuid
 from contextlib import suppress
 
-from nerddiary.server.rpc import RPCErrors
-from nerddiary.server.session.status import UserSessionStatus
-
 from jsonrpcclient.requests import request_uuid
 from jsonrpcclient.responses import Error, Ok, parse
 from pydantic import ValidationError
@@ -17,7 +14,9 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK, Inv
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..client.config import NerdDiaryClientConfig
-from ..server.schema import NotificationType, UserSessionSchema
+from ..server.rpc import RPCErrors
+from ..server.schema import NotificationType, Schema, UserSessionSchema
+from ..server.session.status import UserSessionStatus
 from ..utils.sensitive import mask_sensitive
 from .rpc import AsyncRPCResult, RPCError
 
@@ -31,7 +30,7 @@ class NerdDiaryClient(AsyncApplication):
         | None = None,
         *,
         config: NerdDiaryClientConfig = NerdDiaryClientConfig(),
-        loop: asyncio.AbstractEventLoop = None,
+        loop: asyncio.AbstractEventLoop | None = None,
         logger: logging.Logger = logging.getLogger(__name__),
     ) -> None:
         super().__init__(loop=loop, logger=logger)
@@ -277,19 +276,44 @@ class NerdDiaryClient(AsyncApplication):
 
         return local_ses
 
-    async def exec_api_method(self, method: str, **params) -> t.Any:
+    async def exec_api_method(self, method: str, **params) -> Schema | bool | None:
         try:
             res = await self._run_rpc(method=method, params=params)
+
+            if isinstance(res, bool):
+                return res
+
+            if "schema" not in res or "data" not in res:
+                err = f"Incorrect implementation of {method} on the server"
+                self._logger.error(err)
+                return None
+
+            schema_cls = None
+            for cls in Schema.__subclasses__():
+                if cls.__name__ == res["schema"]:
+                    schema_cls = cls
+                    break
+
+            if schema_cls is None:
+                err = f"Schema class {res['schema']} returned by remote {method=} doesn't exist"
+                self._logger.error(err)
+                return None
+
+            try:
+                return schema_cls.parse_obj(res["data"])
+            except ValidationError:
+                err = f"Incorrect data returned by remote {method=}"
+                self._logger.exception(err)
+                return None
+
         except RPCError as r_err:
             if r_err.code > RPCErrors.ERROR_SERVER_ERROR:
                 raise
             else:
-                err = "Unexpected exception during execution of an API call."
+                err = f"Unexpected RPCError during execution of remote {method=}"
                 self._logger.exception(err)
                 return None
         except Exception:
-            err = "Unexpected exception during execution of an API call."
+            err = f"Unexpected exception during execution of remote {method=}"
             self._logger.exception(err)
             return None
-
-        return res
