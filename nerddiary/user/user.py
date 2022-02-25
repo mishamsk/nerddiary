@@ -46,3 +46,12 @@ class User(BaseModel):
             if len(poll_names_set) != len(poll_names):
                 raise ValueError("Poll names must be unique")
         return v
+
+    @validator("polls")
+    def poll_commands_must_be_unique(cls, v: List[Poll]):
+        if v:
+            poll_commands = [p.command for p in v if p.command is not None]
+            poll_commands_set = set(poll_commands)
+            if len(poll_commands_set) != len(poll_commands):
+                raise ValueError("Poll commands must be unique")
+        return v
