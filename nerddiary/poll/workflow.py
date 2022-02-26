@@ -1,29 +1,35 @@
 import csv
 import datetime
-import logging
+import enum
 from copy import deepcopy
 from io import StringIO
+from uuid import uuid4
 
 from ..primitive.valuelabel import ValueLabel
 from ..user.user import User
 from .poll import Poll, Question
 
-from typing import Dict, List, Tuple, cast
+from typing import Dict, List
 
-logger = logging.getLogger("nerddiary.bot.workflow")
+
+class AddAnswerResult(enum.Enum):
+    ADDED = enum.auto()
+    COMPLETED = enum.auto()
+    DELAY = enum.auto()
+    ERROR = enum.auto()
 
 
 class PollWorkflow:
     def __init__(self, poll: Poll, user: User) -> None:
-        if not isinstance(poll, Poll):
-            raise ValueError("Poll must be an instance of `Poll` class")
+        assert isinstance(poll, Poll)
+
+        self._poll_run_id = uuid4()
 
         # deepcopy poll to prevent config reloads impacting ongoing polls
         self._poll = deepcopy(poll)
-        self._answers_raw: Dict[str, Tuple[str, ValueLabel]] = {}
-        self._poll_iterator = iter(self._poll.questions)
+        self._answers_raw: Dict[int, ValueLabel] = {}
         self._user = user
-        self._current_question: str | None = None
+        self._current_question_index: int = 0
 
         user_timezone = user.timezone
         if self._poll.hours_over_midgnight:
@@ -35,160 +41,146 @@ class PollWorkflow:
                 self._poll_start_timestamp = datetime.datetime.now(user_timezone)
         else:
             self._poll_start_timestamp = datetime.datetime.now(user_timezone)
-        self._poll_created_utc_timestamp = datetime.datetime.now()
-        self._delayed = False
-        self._all_set = False
+
+        self._delayed_at: datetime.datetime | None = None
 
     @property
-    def all_set(self) -> bool:
-        return self._all_set
+    def poll_run_id(self) -> str:
+        return str(self._poll_run_id)
+
+    @property
+    def completed(self) -> bool:
+        return self._current_question_index == len(self._poll.questions)
+
+    @property
+    def current_question(self) -> Question:
+        return self._poll.questions[self._current_question_index]
 
     @property
     def delayed(self) -> bool:
-        return self._delayed
+        return self._delayed_at is not None
 
     @property
-    def started(self) -> bool:
-        return self._current_question is not None
-
-    @property
-    def poll_start_timestamp(self) -> datetime.datetime:
-        return self._poll_start_timestamp
-
-    @property
-    def questions(self) -> Dict[str, Question]:
+    def questions(self) -> List[Question]:
         return self._poll.questions
 
     @property
     def answers(self) -> List[ValueLabel]:
-        return [val[1] for q, val in self._answers_raw.items() if not self._poll.questions[q].ephemeral]
+        return [val for q_index, val in self._answers_raw.items() if not self._poll.questions[q_index].ephemeral]
 
-    def _add_answer(self, val: ValueLabel, question: str, key: str):
-        self._answers_raw[question] = (key, val)
+    @property
+    def current_delay_time(self) -> datetime.timedelta | None:
+        return self._poll.questions[self._current_question_index].delay_time
 
-    def add_answer(self, key: str) -> bool:
-        assert self._current_question is not None
+    def _add_answer(self, val: ValueLabel, question_index: int):
+        self._answers_raw[question_index] = val
 
-        question = self._poll.questions[self._current_question]
-
-        if (
-            question.delay_on and key in question.delay_on  # type:ignore
-        ):
-            self._delayed = True
+    def _next_question(self) -> bool:
+        if self.completed:
             return False
 
+        self._current_question_index += 1
+        new_question = self._poll.questions[self._current_question_index]
+
+        if new_question._type.is_auto:
+            # If auto question - store value and recursively proceed to the next
+            self._process_auto_question()
+            return self._next_question()
+
+        return True
+
+    def _process_auto_question(self) -> None:
+        question = self._poll.questions[self._current_question_index]
+
+        depends_on = question.depends_on
+
+        if depends_on:
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
+            value = question._type.get_auto_value(dep_value=dep_value, user=self._user)
+        else:
+            value = question._type.get_auto_value(user=self._user)
+
+        assert value is not None
+
+        self._add_answer(value, self._current_question_index)
+
+    def add_answer(self, answer: str) -> AddAnswerResult:
+
+        if self._delayed_at is not None:
+            assert self.current_delay_time
+            if datetime.datetime.now() - self._delayed_at < self.current_delay_time:
+                return AddAnswerResult.DELAY
+            else:
+                self._delayed_at = None
+
+        question = self._poll.questions[self._current_question_index]
         value = None
         depends_on = question.depends_on
 
         if depends_on:
-            dep_key, dep_value = self._answers_raw[depends_on]
-            value = question.get_raw_value(key, dep_key, dep_value, self._user)
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
+            value = question._type.get_value_from_answer(answer=answer, dep_value=dep_value, user=self._user)
         else:
-            value = question.get_raw_value(key, user=self._user)
+            value = question._type.get_value_from_answer(answer=answer, user=self._user)
 
-        self._add_answer(value, self._current_question, key)
+        if not value:
+            return AddAnswerResult.ERROR
 
-        return True
+        if question.delay_on and question._type.get_serializable_value(value) in question.delay_on:
+            self._delayed_at = datetime.datetime.now()
+            return AddAnswerResult.DELAY
 
-    def get_next_question(self) -> str | None:
-        if self._delayed:
-            self._delayed = False
-
-            return self._current_question
+        self._add_answer(value, self._current_question_index)
+        if self._next_question():
+            return AddAnswerResult.ADDED
         else:
-            try:
-                new_question = self._current_question = next(self._poll_iterator)
+            return AddAnswerResult.COMPLETED
 
-                if self._poll.questions[new_question].auto:
-                    # If auto question - store value and recursively proceed to the next
-                    self._process_auto_question()
-                    return self.get_next_question()
+    def get_select_raw(self) -> List[ValueLabel] | None:
 
-                return new_question
-            except StopIteration:
-                self._all_set = True
-                return None
-
-    def _process_auto_question(self) -> None:
-        assert self._current_question is not None
-        question = self._poll.questions[self._current_question]
-
-        depends_on = question.depends_on
-
-        if depends_on:
-            dep_key, dep_value = self._answers_raw[depends_on]
-            value = question.get_raw_value(dep_key=dep_key, dep_value=dep_value, user=self._user)
-        else:
-            value = question.get_raw_value(user=self._user)
-
-        self._add_answer(
-            value,
-            self._current_question,
-            self._current_question,
-        )
-
-    def _get_select_raw(self) -> Dict[str, ValueLabel]:
-        cur_question = None
-
-        if self._current_question is None:
-            raise ValueError("Tried to get select list before starting to poll questions")
-        else:
-            cur_question = self._poll.questions[self._current_question]
+        cur_question = self._poll.questions[self._current_question_index]
 
         depends_on = cur_question.depends_on
 
-        ret = {}
+        ret = None
         if depends_on:
-            dep_key, dep_value = self._answers_raw[depends_on]
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
 
-            ret = deepcopy(cur_question.get_select(dep_key, dep_value, self._user))  # type: ignore
+            ret = cur_question._type.get_answer_options(dep_value=dep_value, user=self._user)
         else:
-            ret = deepcopy(cur_question.get_select(user=self._user))
+            ret = cur_question._type.get_answer_options(user=self._user)
 
-        return ret  # type: ignore
+        return ret
 
-    def get_select(self) -> Dict[str, str]:
-        raw = self._get_select_raw()
+    def get_select_serialized(self) -> Dict[str, str] | None:
+        raw = self.get_select_raw()
+
+        if not raw:
+            return None
 
         ret = {}
+        question = self._poll.questions[self._current_question_index]
 
-        for sel_key, sel_val in raw.items():
-            sel_val = cast(ValueLabel, sel_val)
-            ret[sel_key] = sel_val.label
+        for sel_val in raw:
+            ret[question._type.get_serializable_value(sel_val.value)] = sel_val.label
 
         return ret
 
     def get_save_data(self) -> str:
 
-        if self.all_set is False:
-            logger.warn("Save data requested before finishing all questions")
-
         ret = []
         ret.append(self._poll_start_timestamp)
 
-        for q_key, (key, value) in self._answers_raw.items():
-            question = self.questions[q_key]
+        for q_index, value in self._answers_raw.items():
+            question = self._poll.questions[q_index]
 
             if question.ephemeral:
                 continue
 
-            ret.append(question.get_save_value(value))
+            ret.append(question._type.get_serializable_value(value))
 
         csv_str = StringIO()
         writer = csv.writer(csv_str, dialect="excel", quoting=csv.QUOTE_ALL)
         writer.writerow(ret)
 
         return csv_str.getvalue()
-
-    def get_delay_time(self) -> datetime.timedelta:
-        assert self._current_question
-
-        delay = self._poll.questions[self._current_question].delay_time
-        if not delay:
-            delay = datetime.timedelta(seconds=0)
-
-        return delay
-
-
-if __name__ == "__main__":
-    pass

@@ -50,9 +50,7 @@ class Question(BaseModel):
     )
     """ If `delay_on` is set => this is the timedelta for reminder """
 
-    delay_on: Optional[List[str]] = Field(
-        description="Answer that will trigger a reminder and pause poll. Works only for questions with simple select"
-    )
+    delay_on: Optional[List[str]] = Field(description="Answer that will trigger a reminder and pause poll.")
     """ Answer that will trigger a reminder and pause poll """
 
     _order: int = PrivateAttr(default=-1)
@@ -78,7 +76,7 @@ class Question(BaseModel):
         return v
 
     @validator("delay_on")
-    def check_delay_on_value_exist(cls, v, values: Dict[str, Any]):
+    def check_delay_on_value_exist(cls, v: List[str], values: Dict[str, Any]):
         # Type has not been substitued yet, so have to get it from supported_types
         if isinstance(values["type"], str):
             type_cls = QuestionType.supported_types.get(values["type"])
@@ -90,7 +88,9 @@ class Question(BaseModel):
             pos_values = type.get_possible_values()
             if not isinstance(pos_values, list):
                 raise ValueError(f"`dalay_on` value is not compatible with <{type.type}>")
-            if any(dep not in pos_values for dep in v):
+
+            serialized_pos_values = list(map(type.get_serializable_value, pos_values))
+            if any(delay_value not in serialized_pos_values for delay_value in v):
                 raise ValueError(f"`dalay_on` value doesn't exist for the type {type.__class__}")
 
         return v

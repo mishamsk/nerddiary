@@ -63,17 +63,17 @@ class QuestionType(BaseModel, abc.ABC):
         super().__init__(**data)
 
     @abc.abstractmethod
-    def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
+    def get_possible_values(self) -> t.Type[t.Any] | t.List[ValueLabel]:
         pass  # pragma: no cover
 
     def get_value_from_answer(
-        self, answer: str, dep_value: t.Any | None = None, user: User | None = None
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel | None:
         """Raises UnsupportedAnswerError() if string answer value is not supported"""
         if self.is_auto:
             raise NotImplementedError("This type doesn't support user input")
 
-    def get_auto_value(self, dep_value: t.Any | None = None, user: User | None = None) -> ValueLabel | None:
+    def get_auto_value(self, dep_value: ValueLabel | None = None, user: User | None = None) -> ValueLabel | None:
         if not self.is_auto:
             raise NotImplementedError("This type doesn't auto generate a value")
 
@@ -81,7 +81,9 @@ class QuestionType(BaseModel, abc.ABC):
     def get_serializable_value(self, value: ValueLabel) -> str:
         pass  # pragma: no cover
 
-    def get_answer_options(self, dep_value: t.Any | None = None, user: User | None = None) -> t.List[ValueLabel] | None:
+    def get_answer_options(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> t.List[ValueLabel] | None:
         if self.is_auto:
             raise NotImplementedError("This type doesn't support user input")
 
@@ -100,11 +102,11 @@ class SelectType(QuestionType):
         self._auto = False
         self._must_depend = False
 
-    def get_possible_values(self) -> t.List[str]:
-        return [vl.value for vl in self.select]
+    def get_possible_values(self) -> t.List[ValueLabel]:
+        return self.select
 
     def get_value_from_answer(
-        self, answer: str, dep_value: t.Any | None = None, user: User | None = None
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel | None:
         candidates = [vl for vl in self.select if vl.value == answer]
         if not candidates:
@@ -115,7 +117,9 @@ class SelectType(QuestionType):
     def get_serializable_value(self, value: ValueLabel) -> str:
         return str(value.value)
 
-    def get_answer_options(self, dep_value: t.Any | None = None, user: User | None = None) -> t.List[ValueLabel] | None:
+    def get_answer_options(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> t.List[ValueLabel] | None:
         return self.select
 
 
@@ -135,30 +139,30 @@ class DependantSelectType(QuestionType):
             raise ValueError("Select must not be empty")
         return v
 
-    def get_possible_values(self) -> t.List[str]:
+    def get_possible_values(self) -> t.List[ValueLabel]:
         ret = []
         for value_list in self.select.values():
-            ret += [vl.value for vl in value_list]
+            ret += value_list
 
         return ret
 
     def get_value_from_answer(
-        self, answer: str, dep_value: t.Any | None = None, user: User | None = None
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel | None:
         if not dep_value:
             raise AttributeError(
                 "<get_value_from_answer> called without a dependent value for a question with dependent select list"
             )
-        if not isinstance(dep_value, str):
+        if not isinstance(dep_value.value, str):
             raise AttributeError(
-                f"<get_value_from_answer> called with incorrect dependency value. Got {dep_value}, expected a string"
+                f"<get_value_from_answer> called with incorrect dependency value. Got {dep_value.value}, expected a string"
             )
-        if dep_value not in self.select:
+        if dep_value.value not in self.select:
             raise AttributeError(
                 f"<get_value_from_answer> called with incorrect dependency value. Got {dep_value}, but it doesn't exist among this type's select"
             )
 
-        candidates = [vl for vl in self.select[dep_value] if vl.value == answer]
+        candidates = [vl for vl in self.select[dep_value.value] if vl.value == answer]
         if not candidates:
             raise UnsupportedAnswerError()
 
@@ -167,22 +171,24 @@ class DependantSelectType(QuestionType):
     def get_serializable_value(self, value: ValueLabel) -> str:
         return str(value.value)
 
-    def get_answer_options(self, dep_value: t.Any | None = None, user: User | None = None) -> t.List[ValueLabel] | None:
+    def get_answer_options(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> t.List[ValueLabel] | None:
         if not dep_value:
             raise AttributeError(
                 "<get_answer_options> called without a dependent value for a question with dependent select list"
             )
-        if not isinstance(dep_value, str):
+        if not isinstance(dep_value.value, str):
             raise AttributeError(
-                f"<get_answer_options> called with incorrect value. Got {dep_value}, expected a string"
+                f"<get_answer_options> called with incorrect value. Got {dep_value.value}, expected a string"
             )
 
-        if dep_value not in self.select:
+        if dep_value.value not in self.select:
             raise AttributeError(
                 f"<get_value_from_answer> called with incorrect dependency value. Got {dep_value}, but it doesn't exist among this type's select"
             )
 
-        return self.select[dep_value]
+        return self.select[dep_value.value]
 
     def check_dependency_type(self, dependency_type: QuestionType) -> bool:
         """Check that this type is compatible with the type of dependency question. Returns `False` for types that may not depend on others"""
@@ -193,7 +199,7 @@ class DependantSelectType(QuestionType):
             return False
 
         for possible_value in possible_dependency_values:
-            if not isinstance(possible_value, str) or possible_value not in self.select:
+            if not isinstance(possible_value.value, str) or possible_value.value not in self.select:
                 return False
 
         return True
@@ -211,7 +217,7 @@ class TimestampType(QuestionType):
     def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
         return datetime.datetime
 
-    def get_auto_value(self, dep_value: t.Any | None = None, user: User | None = None) -> ValueLabel | None:
+    def get_auto_value(self, dep_value: ValueLabel | None = None, user: User | None = None) -> ValueLabel | None:
         if user is not None:
             now = datetime.datetime.now(user.timezone)
         else:
@@ -284,7 +290,7 @@ class RelativeTimestampType(QuestionType):
         return datetime.datetime
 
     def get_value_from_answer(
-        self, answer: str, dep_value: t.Any | None = None, user: User | None = None
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel | None:
 
         delta = RelativeTimestampType._parse_duration(answer)
@@ -299,7 +305,9 @@ class RelativeTimestampType(QuestionType):
             label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
         )
 
-    def get_answer_options(self, dep_value: t.Any | None = None, user: User | None = None) -> t.List[ValueLabel] | None:
+    def get_answer_options(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> t.List[ValueLabel] | None:
         return None
 
     def get_serializable_value(self, value: ValueLabel) -> str:

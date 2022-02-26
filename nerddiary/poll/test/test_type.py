@@ -11,6 +11,7 @@ from nerddiary.poll.type import (
 from nerddiary.primitive.valuelabel import ValueLabel
 
 import pytest
+import pytz
 from pydantic import ValidationError
 
 
@@ -40,8 +41,8 @@ class TestSelectType:
         select = SelectType.parse_raw(json)
 
         assert select.type is None
-        assert "No" in select.get_possible_values()
-        assert "Yes" in select.get_possible_values()
+        assert vl1 in select.get_possible_values()
+        assert vl2 in select.get_possible_values()
         assert len(select.get_possible_values()) == 2
         assert select.is_auto is False
         assert select.is_dependent is False
@@ -127,16 +128,16 @@ class TestDependantSelectType:
         """
         vl_no_1 = ValueLabel(value="NoNo", label="😀 No")
         vl_no_2 = ValueLabel(value="NoYes", label="😭 Yes")
-        # vl_yes_1 = ValueLabel(value="YesNo", label="😀 No")
-        # vl_yes_2 = ValueLabel(value="YesYes", label="😭 Yes")
+        vl_yes_1 = ValueLabel(value="YesNo", label="😀 No")
+        vl_yes_2 = ValueLabel(value="YesYes", label="😭 Yes")
 
         select = DependantSelectType.parse_raw(json)
 
         assert select.type is None
-        assert "NoNo" in select.get_possible_values()
-        assert "NoYes" in select.get_possible_values()
-        assert "YesNo" in select.get_possible_values()
-        assert "YesYes" in select.get_possible_values()
+        assert vl_no_1 in select.get_possible_values()
+        assert vl_no_2 in select.get_possible_values()
+        assert vl_yes_1 in select.get_possible_values()
+        assert vl_yes_2 in select.get_possible_values()
         assert len(select.get_possible_values()) == 4
         assert select.is_auto is False
         assert select.is_dependent is True
@@ -148,17 +149,17 @@ class TestDependantSelectType:
 
         # Wrong dep value type
         with pytest.raises(AttributeError) as err:
-            select.get_value_from_answer("Other value", 1)
+            select.get_value_from_answer("Other value", ValueLabel(label="label", value=1))
         assert err.type == AttributeError
 
         # Correct dep value, wrong answer value
         with pytest.raises(UnsupportedAnswerError) as err:
-            select.get_value_from_answer("Other value", "No")
+            select.get_value_from_answer("Other value", ValueLabel(label="label", value="No"))
         assert err.type == UnsupportedAnswerError
 
         # Wrong dep value, correct answer value
         with pytest.raises(AttributeError) as err:
-            select.get_value_from_answer("NoNo", "Other value")
+            select.get_value_from_answer("NoNo", ValueLabel(label="label", value="Other value"))
         assert err.type == AttributeError
 
         with pytest.raises(NotImplementedError) as err:
@@ -167,10 +168,10 @@ class TestDependantSelectType:
 
         # Wrong dep value type
         with pytest.raises(AttributeError) as err:
-            select.get_answer_options("Other value")
+            select.get_answer_options(ValueLabel(label="label", value="Other value"))
         assert err.type == AttributeError
 
-        assert select.get_answer_options("No") == [vl_no_1, vl_no_2]
+        assert select.get_answer_options(ValueLabel(label="label", value="No")) == [vl_no_1, vl_no_2]
 
         assert select.get_serializable_value(vl_no_1) == "NoNo"
 
@@ -265,7 +266,7 @@ class TestTimestampType:
 
 
 class TestRelativeTimestampType:
-    def test_correct_function(self, mockuser):
+    def test_correct_function(self):
 
         time = RelativeTimestampType()
 
@@ -275,6 +276,12 @@ class TestRelativeTimestampType:
         assert time.get_possible_values() == datetime
 
         # Checking value conversion
+        class Mock:
+            def __init__(self) -> None:
+                self.timezone = pytz.timezone("US/Eastern")
+
+        mockuser = Mock()
+
         tz = mockuser.timezone
 
         # Unsupported value
@@ -284,35 +291,35 @@ class TestRelativeTimestampType:
 
         # Testing various time delta format parsing
         now_aware = datetime.now(tz).replace(microsecond=0)
-        assert time.get_value_from_answer("1", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(
+        assert time.get_value_from_answer("1", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(  # type: ignore
             hours=1
         )
 
-        assert time.get_value_from_answer("1:12", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(
+        assert time.get_value_from_answer("1:12", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(  # type: ignore
             hours=1, minutes=12
         )
 
-        assert time.get_value_from_answer("1 день", user=mockuser).value.replace(
+        assert time.get_value_from_answer("1 день", user=mockuser).value.replace(  # type: ignore
             microsecond=0
         ) == now_aware - timedelta(days=1)
 
-        assert time.get_value_from_answer("1 день, 2:12:31", user=mockuser).value.replace(
+        assert time.get_value_from_answer("1 день, 2:12:31", user=mockuser).value.replace(  # type: ignore
             microsecond=0
         ) == now_aware - timedelta(days=1, hours=2, minutes=12, seconds=31)
 
-        assert time.get_value_from_answer("-1", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(
+        assert time.get_value_from_answer("-1", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(  # type: ignore
             hours=1
         )
 
-        assert time.get_value_from_answer("-1:12", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(
+        assert time.get_value_from_answer("-1:12", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(  # type: ignore
             hours=1, minutes=12
         )
 
-        assert time.get_value_from_answer("-1 день", user=mockuser).value.replace(
+        assert time.get_value_from_answer("-1 день", user=mockuser).value.replace(  # type: ignore
             microsecond=0
         ) == now_aware + timedelta(days=1)
 
-        assert time.get_value_from_answer("-1 день, 2:12:31", user=mockuser).value.replace(
+        assert time.get_value_from_answer("-1 день, 2:12:31", user=mockuser).value.replace(  # type: ignore
             microsecond=0
         ) == now_aware + timedelta(days=1, hours=2, minutes=12, seconds=31)
 

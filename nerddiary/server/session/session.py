@@ -152,10 +152,10 @@ class SessionSpawner(ABC):
     async def _notify(
         self,
         type: NotificationType,
-        data: Schema = None,
+        data: Schema | None = None,
         exclude: Set[str] = set(),
-        source: str = None,
-        target: str = None,
+        source: str | None = None,
+        target: str | None = None,
     ):
         await self._notification_queue.put((type, data, exclude, source, target))
 

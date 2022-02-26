@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .session.status import UserSessionStatus
 
-from typing import List, Tuple
+from typing import Dict, List
 
 
 def generate_notification(type: NotificationType, data: Schema | None = None) -> str:
@@ -48,11 +48,13 @@ class PollsSchema(Schema):
 
 
 class PollWorkflowStateSchema(Schema):
-    poll_run_id: int
+    poll_run_id: str
     completed: bool
     delayed: bool
     current_question: str
-    no_select: bool
-    select_list: List[Tuple[str, str]]
+    current_question_description: str
+    current_question_value_hint: str
+    current_question_allow_manual_answer: bool
+    current_question_select_list: Dict[str, str] | None
     questions: List[str]
     answers: List[str]

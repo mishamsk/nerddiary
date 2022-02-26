@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from nerddiary.poll.question import Question
 from nerddiary.poll.type import DependantSelectType, TimestampType
+from nerddiary.primitive.valuelabel import ValueLabel
 
 import pytest
 from pydantic import ValidationError
@@ -28,6 +29,11 @@ class TestQuestion:
         }
         """
 
+        vl_no_1 = ValueLabel(value="NoNo", label="😀 No")
+        vl_no_2 = ValueLabel(value="NoYes", label="😭 Yes")
+        vl_yes_1 = ValueLabel(value="YesNo", label="😀 No")
+        vl_yes_2 = ValueLabel(value="YesYes", label="😭 Yes")
+
         q = Question.parse_raw(json)
 
         assert isinstance(q._type, DependantSelectType)
@@ -39,10 +45,10 @@ class TestQuestion:
         assert q.delay_time is None
         assert q.delay_on is None
         assert q._order == -1
-        assert "NoNo" in q._type.get_possible_values()
-        assert "NoYes" in q._type.get_possible_values()
-        assert "YesNo" in q._type.get_possible_values()
-        assert "YesYes" in q._type.get_possible_values()
+        assert vl_no_1 in q._type.get_possible_values()
+        assert vl_no_2 in q._type.get_possible_values()
+        assert vl_yes_1 in q._type.get_possible_values()
+        assert vl_yes_2 in q._type.get_possible_values()
 
         # Check serialization / de-serialization
         nj = q.json(ensure_ascii=False)

@@ -36,3 +36,6 @@ class ValueLabel(BaseModel):
         values: Dict[str, Any],
     ):
         return v if v is not None else values.get("label")
+
+    class Config:
+        frozen = True
