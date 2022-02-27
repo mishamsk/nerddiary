@@ -57,6 +57,10 @@ class PollWorkflow:
         return self._poll.questions[self._current_question_index]
 
     @property
+    def current_question_index(self) -> int:
+        return self._current_question_index
+
+    @property
     def delayed(self) -> bool:
         return self._delayed_at is not None
 

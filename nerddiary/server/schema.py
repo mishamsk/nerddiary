@@ -52,8 +52,9 @@ class PollWorkflowStateSchema(Schema):
     completed: bool
     delayed: bool
     current_question: str
-    current_question_description: str
-    current_question_value_hint: str
+    current_question_index: int
+    current_question_description: str | None
+    current_question_value_hint: str | None
     current_question_allow_manual_answer: bool
     current_question_select_list: Dict[str, str] | None
     questions: List[str]
