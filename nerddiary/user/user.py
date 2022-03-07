@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from datetime import tzinfo
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, PrivateAttr, validator
 from pydantic.fields import Field
 
 from ..poll.poll import Poll
 from ..primitive.timezone import TimeZone
 from ..report.report import Report
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class User(BaseModel):
@@ -24,6 +24,10 @@ class User(BaseModel):
     polls: Optional[List[Poll]] = Field(min_items=1)
     reports: Optional[List[Report]] = Field(min_items=1)
 
+    _polls_dict: Dict[str, Poll] = PrivateAttr(default={})
+    """ Dictionary of polls for workflow convinience
+    """
+
     class Config:
         title = "User Configuration"
         extra = "forbid"
@@ -34,7 +38,12 @@ class User(BaseModel):
 
         # convert_reminder_times_to_local_if_set
         if self.polls:
+            # Create help mappings for workflow processing
+            self._polls_dict = {}
+
             for poll in self.polls:
+                self._polls_dict |= {poll.poll_name: poll}
+
                 if poll.reminder_time:
                     poll.reminder_time = poll.reminder_time.replace(tzinfo=self.timezone)
 

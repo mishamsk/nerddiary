@@ -7,7 +7,7 @@ from pathlib import Path
 
 import sqlalchemy as sa
 from cryptography.fernet import InvalidToken
-from pydantic import BaseModel, DirectoryPath, PrivateAttr, ValidationError
+from pydantic import BaseModel, DirectoryPath, ValidationError
 from sqlalchemy.dialects.sqlite import BLOB
 from sqlalchemy.sql.expression import Select
 
@@ -20,8 +20,7 @@ class DataCorruptionType(enum.Enum):
     UNDEFINED = enum.auto()
     LOCK_WRITE_FAILURE = enum.auto()
     INCORRECT_LOCK = enum.auto()
-    CONFIG_NO_LOCK = enum.auto()
-    DATA_NO_LOCK = enum.auto()
+    USER_DATA_NO_LOCK = enum.auto()
 
 
 class DataCorruptionError(Exception):  # pragma: no cover
@@ -36,10 +35,8 @@ class DataCorruptionError(Exception):  # pragma: no cover
                 mes = "Lock file didn't match this user_id"
             case DataCorruptionType.LOCK_WRITE_FAILURE:
                 mes = "Failed to create lock file"
-            case DataCorruptionType.CONFIG_NO_LOCK:
-                mes = "Config exists, but lock file is missing"
-            case DataCorruptionType.DATA_NO_LOCK:
-                mes = "Data exists, but lock file is missing"
+            case DataCorruptionType.USER_DATA_NO_LOCK:
+                mes = "User data exists, but lock file is missing"
             case _:
                 mes = "Unspecified data corruption"
 
@@ -82,11 +79,8 @@ class DataProvider(ABC):
         encr = None
 
         if not self.check_lock_exist(user_id):
-            if self.check_config_exist(user_id):
-                raise DataCorruptionError(DataCorruptionType.CONFIG_NO_LOCK)
-
-            if self.check_data_exist(user_id):
-                raise DataCorruptionError(DataCorruptionType.DATA_NO_LOCK)
+            if self.check_user_data_exist(user_id):
+                raise DataCorruptionError(DataCorruptionType.USER_DATA_NO_LOCK)
 
             if not isinstance(password_or_key, str):
                 raise ValueError("No lock file for this user. A `str` type password must be provided")
@@ -100,6 +94,8 @@ class DataProvider(ABC):
                 raise ValueError("Lock file found. Either a `str` password ot `bytes` key must be provided")
 
             lock = self.get_lock(user_id)
+            assert lock
+
             try:
                 encr = EncryptionProdiver(password_or_key, init_token=lock, control_message=user_id.encode())
             except InvalidToken:
@@ -114,11 +110,7 @@ class DataProvider(ABC):
         pass  # pragma: no cover
 
     @abstractmethod
-    def check_data_exist(self, user_id: str) -> bool:
-        pass  # pragma: no cover
-
-    @abstractmethod
-    def check_config_exist(self, user_id: str) -> bool:
+    def check_user_data_exist(self, user_id: str, category: str | None = None) -> bool:
         pass  # pragma: no cover
 
     @abstractmethod
@@ -160,7 +152,7 @@ class DataConnection(ABC):
         self,
         data_provider: DataProvider,
         user_id: str,
-        encryption_provider: EncryptionProdiver | None,
+        encryption_provider: EncryptionProdiver,
     ) -> None:
         super().__init__()
 
@@ -177,12 +169,12 @@ class DataConnection(ABC):
         return self._encryption_provider.key
 
     @abstractmethod
-    def store_config(self, config: str) -> bool:
+    def store_user_data(self, data: str, category: str) -> bool:
         """Saves serialized config"""
         pass  # pragma: no cover
 
     @abstractmethod
-    def load_config(self) -> str | None:
+    def get_user_data(self, category: str) -> str | None:
         """Reads serialized config if exists"""
         pass  # pragma: no cover
 
@@ -217,9 +209,9 @@ class DataConnection(ABC):
     def get_poll_logs(
         self,
         poll_code: str,
-        date_from: datetime.datetime = None,
-        date_to: datetime.datetime = None,
-        max_rows: int = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+        max_rows: int | None = None,
     ) -> List[Tuple[Any, str]]:
         """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
@@ -233,7 +225,6 @@ class DataConnection(ABC):
 
 class SQLLiteProviderParams(BaseModel):
     base_path: DirectoryPath
-    _base_uri: str = PrivateAttr(default="sqlite:///")
 
     class Config:
         extra = "forbid"
@@ -241,6 +232,10 @@ class SQLLiteProviderParams(BaseModel):
 
 class SQLLiteProvider(DataProvider):
     name = "sqllite"
+    BASE_URI = "sqlite:///"
+    DB_FILE_NAME = "data.db"
+    POLL_LOG_TABLE = "poll_log"
+    USER_DATA_TABLE = "user_data"
 
     def __init__(self, params: Dict[str, Any]) -> None:
         super().__init__(params)
@@ -250,13 +245,23 @@ class SQLLiteProvider(DataProvider):
     def _get_connection(self, user_id: str, encr: EncryptionProdiver) -> SQLLiteConnection:
         return SQLLiteConnection(self, user_id, encr)
 
-    def check_data_exist(self, user_id: str) -> bool:
-        data_path = self._params.base_path.joinpath(user_id, "data.db")
-        return data_path.exists() and data_path.is_file()
+    def check_user_data_exist(self, user_id: str, category: str | None = None) -> bool:
+        data_path = self._params.base_path.joinpath(user_id, self.DB_FILE_NAME)
+        db_exists = data_path.exists() and data_path.is_file()
 
-    def check_config_exist(self, user_id: str) -> bool:
-        config_path = self._params.base_path.joinpath(user_id, "config")
-        return config_path.exists() and config_path.is_file()
+        if category is None or not db_exists:
+            return db_exists
+
+        # TODO: check user id is a valid folder path
+        engine = sa.create_engine(self.BASE_URI + str(self._params.base_path.joinpath(user_id, self.DB_FILE_NAME)))
+
+        with engine.connect() as conn:
+            result = conn.execute(sa.text(f"SELECT count(*) FROM {self.USER_DATA_TABLE} WHERE category='{category}'"))
+            count = result.scalar()
+            if count == 1:
+                return True
+            else:
+                return False
 
     def check_lock_exist(self, user_id: str) -> bool:
         lock_path = self._params.base_path.joinpath(user_id, "lock")
@@ -298,21 +303,23 @@ class SQLLiteConnection(DataConnection):
         self,
         data_provider: SQLLiteProvider,
         user_id: str,
-        encryption_provider: EncryptionProdiver = None,
+        encryption_provider: EncryptionProdiver,
     ) -> None:
         super().__init__(data_provider, user_id, encryption_provider)
 
         base_path = data_provider._params.base_path
         base_path.joinpath(self.user_id).mkdir(exist_ok=True)
 
+        # TODO: check user id is a valid folder path
         self._engine = engine = sa.create_engine(
-            data_provider._params._base_uri + str(data_provider._params.base_path.joinpath(self.user_id, "data.db"))
+            data_provider.BASE_URI
+            + str(data_provider._params.base_path.joinpath(self.user_id, data_provider.DB_FILE_NAME))
         )
 
         self._meta = meta = sa.MetaData()
 
-        self._data_table = data_table = sa.Table(
-            "data",
+        self._poll_log_table = poll_log_table = sa.Table(
+            data_provider.POLL_LOG_TABLE,
             meta,
             sa.Column("id", sa.Integer, primary_key=True, index=True, nullable=False),
             sa.Column("poll_code", sa.String, index=True, unique=False, nullable=False),
@@ -321,41 +328,79 @@ class SQLLiteConnection(DataConnection):
             sa.Column("updated_ts", sa.DATETIME, nullable=False),
         )
 
+        self._user_data_table = user_data_table = sa.Table(
+            data_provider.USER_DATA_TABLE,
+            meta,
+            sa.Column("category", sa.String, primary_key=True, index=True, unique=True, nullable=False),
+            sa.Column("data", BLOB, nullable=False),
+            sa.Column("created_ts", sa.DATETIME, nullable=False),
+            sa.Column("updated_ts", sa.DATETIME, nullable=False),
+        )
+
         with engine.connect() as conn:
-            data_table.create(conn, checkfirst=True)
+            poll_log_table.create(conn, checkfirst=True)
+            user_data_table.create(conn, checkfirst=True)
 
-    def store_config(self, config: str) -> bool:
-        assert isinstance(self._data_provider, SQLLiteProvider)
+    def store_user_data(self, data: str, category: str) -> bool:
+        now = datetime.datetime.now()
 
-        config_path = self._data_provider._params.base_path.joinpath(self.user_id, "config")
+        stmt = self._user_data_table.select().where(self._user_data_table.c.category == category)
+        new = True
+        with self._engine.connect() as conn:
+            result = conn.execute(stmt)
 
-        assert isinstance(config_path, Path)
+            if result.rowcount == 1:
+                new = False
 
-        try:
-            config_path.write_bytes(self._encryption_provider.encrypt(config.encode()))
-        except OSError:  # pragma: no cover
-            return False
+        stmt = None
 
-        return True
+        data_out = self._encryption_provider.encrypt(data.encode())
 
-    def load_config(self) -> str | None:
-        assert isinstance(self._data_provider, SQLLiteProvider)
-
-        config_path = self._data_provider._params.base_path.joinpath(self.user_id, "config")
-
-        assert isinstance(config_path, Path)
-
-        if not config_path.exists():
-            return None
+        if new:
+            stmt = self._user_data_table.insert(
+                values={
+                    "data": data_out,
+                    "category": category,
+                    "created_ts": now,
+                    "updated_ts": now,
+                }
+            )
         else:
-            return self._encryption_provider.decrypt(config_path.read_bytes()).decode()
+            stmt = self._user_data_table.update(
+                values={
+                    "data": data_out,
+                    "category": category,
+                    "created_ts": now,
+                    "updated_ts": now,
+                }
+            ).where(self._user_data_table.c.category == category)
+
+        with self._engine.connect() as conn:
+            result = conn.execute(stmt)
+
+            if result.rowcount == 1:
+                return True
+            else:
+                return False
+
+    def get_user_data(self, category: str) -> str | None:
+        stmt = sa.select(self._user_data_table.c.data).where(self._user_data_table.c.category == category)  # type: ignore
+
+        with self._engine.connect() as conn:
+            result = conn.execute(stmt)
+            data = result.scalar()
+
+            if data:
+                return self._encryption_provider.decrypt(data).decode()
+            else:
+                return None
 
     def append_log(self, poll_code: str, log: str) -> int | None:
         now = datetime.datetime.now()
 
         log_out = self._encryption_provider.encrypt(log.encode())
 
-        stmt = self._data_table.insert(
+        stmt = self._poll_log_table.insert(
             values={
                 "log": log_out,
                 "poll_code": poll_code,
@@ -392,7 +437,7 @@ class SQLLiteConnection(DataConnection):
         self,
         ids: List[Any],
     ) -> List[Tuple[Any, str]]:
-        stmt = self._data_table.select().where(self._data_table.c.id.in_(ids))
+        stmt = self._poll_log_table.select().where(self._poll_log_table.c.id.in_(ids))
 
         return self._query_and_decrypt(stmt)
 
@@ -401,7 +446,7 @@ class SQLLiteConnection(DataConnection):
 
         log_out = self._encryption_provider.encrypt(log.encode())
 
-        stmt = self._data_table.update().where(self._data_table.c.id == id).values(log=log_out, updated_ts=now)
+        stmt = self._poll_log_table.update().where(self._poll_log_table.c.id == id).values(log=log_out, updated_ts=now)
 
         with self._engine.connect() as conn:
             result = conn.execute(stmt)
@@ -412,24 +457,24 @@ class SQLLiteConnection(DataConnection):
                 return False
 
     def get_all_logs(self) -> List[Tuple[Any, str]]:
-        stmt = self._data_table.select()
+        stmt = self._poll_log_table.select()
 
         return self._query_and_decrypt(stmt)
 
     def get_poll_logs(
         self,
         poll_code: str,
-        date_from: datetime.datetime = None,
-        date_to: datetime.datetime = None,
-        max_rows: int = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+        max_rows: int | None = None,
     ) -> List[Tuple[Any, str]]:
-        stmt = self._data_table.select().where(self._data_table.c.poll_code == poll_code)
+        stmt = self._poll_log_table.select().where(self._poll_log_table.c.poll_code == poll_code)
 
         if date_from:
-            stmt = stmt.where(self._data_table.c.created_ts >= date_from)
+            stmt = stmt.where(self._poll_log_table.c.created_ts >= date_from)
 
         if date_to:
-            stmt = stmt.where(self._data_table.c.created_ts <= date_to)
+            stmt = stmt.where(self._poll_log_table.c.created_ts <= date_to)
 
         if max_rows:
             stmt = stmt.limit(max_rows)

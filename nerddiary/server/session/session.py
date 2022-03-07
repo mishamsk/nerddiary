@@ -26,7 +26,6 @@ class UserSession(BaseModel):
     user_id: str
     user_status: UserSessionStatus = Field(default=UserSessionStatus.NEW, exclude=True)
     # active_polls: Dict[str, PollWorkflow] = PrivateAttr(default={})
-    # poll_last_timestamps: Dict[str, datetime] = PrivateAttr(default={})
     _user_config: User | None = PrivateAttr(default=None)
     _data_connection: DataConnection | None = PrivateAttr(default=None)
     _session_spawner: SessionSpawner | None = PrivateAttr(default=None)
@@ -46,9 +45,12 @@ class UserSession(BaseModel):
             return False
 
         new_status = UserSessionStatus.UNLOCKED
-        if self._session_spawner._data_provoider.check_config_exist(self.user_id):
+        if self._session_spawner._data_provoider.check_user_data_exist(self.user_id, category="config"):
             try:
-                self._user_config = User.parse_raw(self._data_connection.load_config())  # type:ignore
+                config = self._data_connection.get_user_data(category="config")
+                assert config
+
+                self._user_config = User.parse_raw(config)
                 new_status = UserSessionStatus.CONFIGURED
             except ValidationError:
                 pass

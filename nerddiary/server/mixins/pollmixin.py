@@ -37,3 +37,29 @@ class PollMixin:
             "data": PollsSchema(polls=polls).dict(exclude_unset=True),
         }
         return Success(json.dumps(ret))
+
+    @method  # type:ignore
+    async def start_poll(self: ServerProtocol, user_id: str, poll_name: str) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        ses = await self._sessions.get(user_id)
+
+        if not ses:
+            return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
+
+        if not ses.user_status >= UserSessionStatus.CONFIGURED:
+            return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
+        assert ses._user_config
+
+        poll = ses._user_config._polls_dict.get(poll_name)
+        if poll is None:
+            return Error(RPCErrors.ERROR_POLL_NOT_FOUND, f"Poll with {poll_name=} wasn't found")
+
+        # session function...
+        # workflow = PollWorkflow(poll=poll, user=ses._user_config)
+
+        ret = {
+            "schema": "PollsSchema",
+            "data": PollsSchema(polls=[]).dict(exclude_unset=True),
+        }
+        return Success(json.dumps(ret))
