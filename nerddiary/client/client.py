@@ -256,6 +256,7 @@ class NerdDiaryClient(AsyncApplication):
                     self._sessions[user_id] = ses
             else:
                 self._sessions[user_id] = ses
+                # TODO: if session is unlocked on the server - process polls (currently in start handler...)
         except ValidationError:
             self._logger.exception("Received incorrect session data from the server")
             raise RuntimeError("Received incorrect session data from the server")
@@ -266,8 +267,7 @@ class NerdDiaryClient(AsyncApplication):
 
         if not local_ses:
             try:
-                res = await self._run_rpc("get_session", params={"user_id": str(user_id)})
-                local_ses = UserSessionSchema.parse_raw(res)
+                local_ses = await self.exec_api_method("get_session", user_id=str(user_id))
                 self._sessions[user_id] = local_ses
             except ValidationError:
                 self._logger.exception("Received incorrect session data from the server")
@@ -279,6 +279,11 @@ class NerdDiaryClient(AsyncApplication):
     async def exec_api_method(self, method: str, **params) -> Schema | bool | None:
         try:
             res = await self._run_rpc(method=method, params=params)
+
+            if res is None:
+                err = f"{method} call timed out"
+                self._logger.warning(err)
+                return None
 
             if isinstance(res, bool):
                 return res

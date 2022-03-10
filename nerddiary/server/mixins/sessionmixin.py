@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from nerddiary.server.session.status import UserSessionStatus
 
 from jsonrpcserver import Error, InvalidParams, Result, Success, method
@@ -25,7 +23,7 @@ class SessionMixin:
             "schema": "UserSessionSchema",
             "data": UserSessionSchema(user_id=ses.user_id, user_status=ses.user_status).dict(exclude_unset=True),
         }
-        return Success(json.dumps(ret))
+        return Success(ret)
 
     @method  # type:ignore
     async def unlock_session(

@@ -122,6 +122,7 @@ class UserSession:
             raise SessionError(SessionErrorType.POLL_NOT_FOUND)
 
         if poll.once_per_day:
+            # TODO: also check current active
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
                 log = logs[0][1]
@@ -211,7 +212,8 @@ class SessionSpawner:
             return self._sessions[user_id]
 
         try:
-            return await self._load_or_create_session(user_id)
+            self._sessions[user_id] = await self._load_or_create_session(user_id)
+            return self._sessions[user_id]
         except SessionError:
             self._logger.exception("Error getting session")
             return None
@@ -261,7 +263,7 @@ class SessionSpawner:
         if session_exists and not lock_exists:
             raise SessionError(SessionErrorType.SESSION_NO_LOCK)
 
-        self._logger.debug(f"Creating session. {session_exists}")
+        self._logger.debug(f"Creating session. {session_exists=}")
         user_status = UserSessionStatus.LOCKED if session_exists else UserSessionStatus.NEW
         session = UserSession(session_spawner=self, user_id=user_id, user_status=user_status)
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from nerddiary.poll.type import QuestionType
 from nerddiary.server.session.session import SessionError, SessionErrorType
 
@@ -35,16 +33,14 @@ class PollMixin:
         if polls:
             for poll in polls:
                 polls_ret.append(
-                    PollBaseSchema(poll_name=poll.poll_name, command=poll.command, description=poll.description).json(
-                        exclude_unset=True
-                    )
+                    PollBaseSchema(poll_name=poll.poll_name, command=poll.command, description=poll.description)
                 )
 
         ret = {
             "schema": "PollsSchema",
             "data": PollsSchema(polls=polls_ret).dict(exclude_unset=True),
         }
-        return Success(json.dumps(ret))
+        return Success(ret)
 
     @method  # type:ignore
     async def start_poll(self: ServerProtocol, user_id: str, poll_name: str) -> Result:
@@ -90,4 +86,4 @@ class PollMixin:
                 answers=[a.label for a in poll_workflow.answers],
             ).dict(exclude_unset=True),
         }
-        return Success(json.dumps(ret))
+        return Success(ret)
