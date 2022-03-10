@@ -61,7 +61,7 @@ def mockpoll():
             {
                 "type": "relative_timestamp",
                 "code": "start_time",
-                "name": "When did it start?",
+                "display_name": "When did it start?",
                 "description": "Type in how many hours ago did it start aching"
             },
             {
@@ -72,7 +72,7 @@ def mockpoll():
                     ]
                 },
                 "code": "finished",
-                "name": "Has it finished?",
+                "display_name": "Has it finished?",
                 "description": "If you still experience headche - answer No and I will ask again in 3 hours",
                 "ephemeral": true,
                 "delay_time": 2,
@@ -87,7 +87,7 @@ def mockpoll():
                     ]
                 },
                 "code": "headache_type",
-                "name": "What type of headache was it?",
+                "display_name": "What type of headache was it?",
                 "description": "Choose among provided headache types"
             },
             {
@@ -99,7 +99,7 @@ def mockpoll():
                     ]
                 },
                 "code": "drug_type",
-                "name": "What drug did you use?",
+                "display_name": "What drug did you use?",
                 "description": "Choose among provided drugs or select none if you did not take any"
             },
             {
@@ -119,7 +119,7 @@ def mockpoll():
                     }
                 },
                 "code": "drug_dose",
-                "name": "What dose?",
+                "display_name": "What dose?",
                 "description": "Choose among provided drugs or select none if you did not take any",
                 "depends_on": "drug_type"
             }

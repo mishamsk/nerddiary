@@ -32,15 +32,15 @@ class PollWorkflow:
         self._current_question_index: int = 0
 
         user_timezone = user.timezone
+        now = datetime.datetime.now(user_timezone)
         if self._poll.hours_over_midgnight:
-            now = datetime.datetime.now(user_timezone)
             check = now - datetime.timedelta(hours=self._poll.hours_over_midgnight)
             if check.date() < now.date():
                 self._poll_start_timestamp = check
             else:
-                self._poll_start_timestamp = datetime.datetime.now(user_timezone)
+                self._poll_start_timestamp = now
         else:
-            self._poll_start_timestamp = datetime.datetime.now(user_timezone)
+            self._poll_start_timestamp = now
 
         self._delayed_at: datetime.datetime | None = None
 
@@ -173,7 +173,7 @@ class PollWorkflow:
     def get_save_data(self) -> str:
 
         ret = []
-        ret.append(self._poll_start_timestamp)
+        ret.append(self._poll_start_timestamp.isoformat())
 
         for q_index, value in self._answers_raw.items():
             question = self._poll.questions[q_index]
@@ -188,3 +188,11 @@ class PollWorkflow:
         writer.writerow(ret)
 
         return csv_str.getvalue()
+
+    @classmethod
+    def get_poll_start_timestamp_from_saved_data(cls, data: str) -> datetime.datetime:
+        if not data:
+            raise AttributeError("Data is missing")
+
+        row = next(csv.reader([data], dialect="excel", quoting=csv.QUOTE_ALL))
+        return datetime.datetime.fromisoformat(row[0])

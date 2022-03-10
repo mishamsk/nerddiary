@@ -18,7 +18,6 @@ from .mixins.pollmixin import PollMixin
 from .mixins.sessionmixin import SessionMixin
 from .schema import ClientSchema, NotificationType, Schema, UserSessionSchema, generate_notification
 from .session.session import SessionSpawner
-from .session.string import StringSessionSpawner
 
 from typing import Dict, Set, Tuple
 
@@ -28,7 +27,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self,
         session: str | SessionSpawner = "default",
         config: NerdDiaryServerConfig = NerdDiaryServerConfig(),
-        loop: asyncio.AbstractEventLoop = None,
+        loop: asyncio.AbstractEventLoop | None = None,
         logger: logging.Logger = logging.getLogger(__name__),
     ) -> None:
         super().__init__(loop=loop, logger=logger)
@@ -45,8 +44,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self._notification_dispatcher = None
 
         if isinstance(session, str):
-            self._sessions = StringSessionSpawner(
-                params=config.session_spawner_params,
+            self._sessions = SessionSpawner(
                 data_provider=self._data_provider,
                 notification_queue=self._notification_queue,
                 logger=self._logger.getChild("sessions"),
@@ -73,7 +71,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self._notification_dispatcher = asyncio.create_task(self._notification_dispatch())
         self._message_dispatcher = asyncio.create_task(self._message_dispatch())
 
-        await self._sessions.load_sessions()
+        await self._sessions.init_sessions()
 
     async def _aclose(self) -> bool:
         with suppress(asyncio.CancelledError):
@@ -223,9 +221,9 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
     async def notify(
         self,
         type: NotificationType,
-        data: Schema = None,
+        data: Schema | None = None,
         exclude: Set[str] = set(),
-        source: str = None,
-        target: str = None,
+        source: str | None = None,
+        target: str | None = None,
     ):
         await self._notification_queue.put((type, data, exclude, source, target))

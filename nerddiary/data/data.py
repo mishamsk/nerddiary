@@ -110,6 +110,10 @@ class DataProvider(ABC):
         pass  # pragma: no cover
 
     @abstractmethod
+    def get_user_list(self) -> List[str]:
+        pass
+
+    @abstractmethod
     def check_user_data_exist(self, user_id: str, category: str | None = None) -> bool:
         pass  # pragma: no cover
 
@@ -244,6 +248,15 @@ class SQLLiteProvider(DataProvider):
 
     def _get_connection(self, user_id: str, encr: EncryptionProdiver) -> SQLLiteConnection:
         return SQLLiteConnection(self, user_id, encr)
+
+    def get_user_list(self) -> List[str]:
+        ret = []
+
+        for file in self._params.base_path.iterdir():
+            if file.is_dir():
+                ret.append(str(file.name))
+
+        return ret
 
     def check_user_data_exist(self, user_id: str, category: str | None = None) -> bool:
         data_path = self._params.base_path.joinpath(user_id, self.DB_FILE_NAME)

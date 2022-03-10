@@ -13,6 +13,7 @@ class TestQuestion:
         json = """
         {
             "code":"q",
+            "display_name":"name",
             "description": "some description",
             "type": {
                 "select": {
@@ -38,7 +39,7 @@ class TestQuestion:
 
         assert isinstance(q._type, DependantSelectType)
         assert q.code == "q"
-        assert q.name == "q"
+        assert q.display_name == "name"
         assert q.description == "some description"
         assert q.ephemeral is False
         assert q.depends_on is None
@@ -57,7 +58,7 @@ class TestQuestion:
         json = """
         {
             "code":"q",
-            "name": "not code",
+            "display_name": "not code",
             "type": "timestamp"
         }
         """
@@ -66,7 +67,7 @@ class TestQuestion:
 
         assert isinstance(q._type, TimestampType)
         assert q.code == "q"
-        assert q.name == "not code"
+        assert q.display_name == "not code"
         assert q.description is None
         assert q.ephemeral is False
         assert q.depends_on is None
@@ -81,6 +82,7 @@ class TestQuestion:
         json = """
         {
             "code":"q2",
+            "display_name": "not code",
             "type": {
                 "select": {
                     "No": [
@@ -117,6 +119,7 @@ class TestQuestion:
         # missing code
         json = """
         {
+            "display_name": "not code",
             "description": "some description",
             "type": {
                 "select": {
@@ -143,6 +146,7 @@ class TestQuestion:
         json = """
         {
             "code": "q",
+            "display_name": "not code",
             "type": {
                 "select": {
                     "No": [
@@ -168,6 +172,7 @@ class TestQuestion:
         json = """
         {
             "code": "q",
+            "display_name": "not code",
             "type": "what is this type?"
         }
         """
@@ -182,6 +187,7 @@ class TestQuestion:
         json = """
         {
             "code": "q",
+            "display_name": "not code",
             "type": {
                 "select": {
                     "No": [
@@ -208,6 +214,7 @@ class TestQuestion:
         json = """
         {
             "code": "q",
+            "display_name": "not code",
             "type": {
                 "select": {
                     "No": [
@@ -235,6 +242,7 @@ class TestQuestion:
         json = """
         {
             "code": "q",
+            "display_name": "not code",
             "type": "timestamp",
             "delay_on": ["NoNo and no!"],
             "delay_time": "10:15"

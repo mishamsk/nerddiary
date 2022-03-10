@@ -77,12 +77,12 @@ class Poll(BaseModel):
             if question.depends_on:
                 if question.depends_on not in previous:
                     raise ValueError(
-                        f"Question <{question.name}> depends on <{question.depends_on}> which is either not defined, or goes after this question"
+                        f"Question <{question.display_name}> depends on <{question.depends_on}> which is either not defined, or goes after this question"
                     )
 
                 if not question._type.check_dependency_type(q_dict[question.depends_on]._type):  # type: ignore
                     raise ValueError(
-                        f"Question <{question.name}> is of type that is not compatible with the dependcy question <{question.depends_on}>"
+                        f"Question <{question.display_name}> is of type that is not compatible with the dependcy question <{question.depends_on}>"
                     )
 
             previous.append(name)
@@ -94,7 +94,7 @@ class Poll(BaseModel):
         # Check that dependant question exists and has already been processed (comes earlier)
         if v.depends_on and not v._type.is_dependent:  # type:ignore
             raise ValueError(
-                f"Question <{v.name}> depends on <{v.depends_on}> but is not of a type that can be dependant"
+                f"Question <{v.display_name}> depends on <{v.depends_on}> but is not of a type that can be dependant"
             )
 
         return v

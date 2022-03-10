@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 
+from nerddiary.poll.type import QuestionType
+from nerddiary.server.session.session import SessionError, SessionErrorType
+
 from jsonrpcserver import Error, Result, Success, method
 
 from ..proto import ServerProtocol
 from ..rpc import RPCErrors
-from ..schema import PollBaseSchema, PollsSchema
-from ..session.status import UserSessionStatus
+from ..schema import PollBaseSchema, PollsSchema, PollWorkflowStateSchema
 
 
 class PollMixin:
@@ -20,13 +22,19 @@ class PollMixin:
         if not ses:
             return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
 
-        if not ses.user_status >= UserSessionStatus.CONFIGURED:
-            return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
+        polls = None
+        try:
+            polls = await ses.get_polls()
+        except SessionError as err:
+            if err.type == SessionErrorType.SESSION_INCORRECT_STATUS:
+                return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
+            else:
+                return Error(RPCErrors.ERROR_INTERNAL_ERROR, "Internal error. Failed to retrieve poll list")
 
-        polls = []
-        if ses._user_config.polls:
-            for poll in ses._user_config.polls:
-                polls.append(
+        polls_ret = []
+        if polls:
+            for poll in polls:
+                polls_ret.append(
                     PollBaseSchema(poll_name=poll.poll_name, command=poll.command, description=poll.description).json(
                         exclude_unset=True
                     )
@@ -34,7 +42,7 @@ class PollMixin:
 
         ret = {
             "schema": "PollsSchema",
-            "data": PollsSchema(polls=polls).dict(exclude_unset=True),
+            "data": PollsSchema(polls=polls_ret).dict(exclude_unset=True),
         }
         return Success(json.dumps(ret))
 
@@ -47,19 +55,39 @@ class PollMixin:
         if not ses:
             return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
 
-        if not ses.user_status >= UserSessionStatus.CONFIGURED:
-            return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
-        assert ses._user_config
+        poll_workflow = None
+        try:
+            poll_workflow = await ses.start_poll(poll_name)
+        except SessionError as err:
+            match err.type:
+                case SessionErrorType.SESSION_INCORRECT_STATUS:
+                    return Error(RPCErrors.SESSION_INCORRECT_STATUS, "User has no configuration yet")
+                case SessionErrorType.POLL_NOT_FOUND:
+                    return Error(RPCErrors.ERROR_POLL_NOT_FOUND, f"Poll with {poll_name=} wasn't found")
+                case _:
+                    return Error(RPCErrors.ERROR_INTERNAL_ERROR, "Internal error. Failed to retrieve poll list")
 
-        poll = ses._user_config._polls_dict.get(poll_name)
-        if poll is None:
-            return Error(RPCErrors.ERROR_POLL_NOT_FOUND, f"Poll with {poll_name=} wasn't found")
-
-        # session function...
-        # workflow = PollWorkflow(poll=poll, user=ses._user_config)
+        assert isinstance(poll_workflow.current_question.type, QuestionType)
+        select_list = None
+        options = poll_workflow.current_question.type.get_answer_options()
+        if options:
+            select_list = {vl.value: vl.label for vl in options}
 
         ret = {
-            "schema": "PollsSchema",
-            "data": PollsSchema(polls=[]).dict(exclude_unset=True),
+            "schema": "PollWorkflowStateSchema",
+            "data": PollWorkflowStateSchema(
+                poll_run_id=poll_workflow.poll_run_id,
+                completed=poll_workflow.completed,
+                delayed=poll_workflow.delayed,
+                current_question=poll_workflow.current_question.display_name,
+                current_question_index=poll_workflow.current_question_index,
+                current_question_description=poll_workflow.current_question.description,
+                current_question_value_hint=poll_workflow.current_question.type.value_hint,
+                # TODO: switch to type attribute
+                current_question_allow_manual_answer=options is None,
+                current_question_select_list=select_list,
+                questions=[q.display_name for q in poll_workflow.questions if q.ephemeral is False],
+                answers=[a.label for a in poll_workflow.answers],
+            ).dict(exclude_unset=True),
         }
         return Success(json.dumps(ret))

@@ -19,6 +19,7 @@ class TestPoll:
             "questions": [
                 {
                     "code": "q1",
+                    "display_name" : "q1",
                     "type": {
                         "select": [
                             {"No": "😀 No"},
@@ -28,6 +29,7 @@ class TestPoll:
                 },
                 {
                     "code": "q2",
+                    "display_name" : "q2",
                     "depends_on": "q1",
                     "type": {
                         "select": {
@@ -71,6 +73,7 @@ class TestPoll:
             "questions": [
                 {
                     "code": "q1",
+                    "display_name" : "q1",
                     "type": {
                         "select": [
                             {"No": "😀 No"},
@@ -80,6 +83,7 @@ class TestPoll:
                 },
                 {
                     "code": "q2",
+                    "display_name" : "q2",
                     "depends_on": "q1",
                     "type": {
                         "select": {
@@ -96,6 +100,7 @@ class TestPoll:
                 },
                 {
                     "code":"q3",
+                    "display_name" : "q3",
                     "name": "auto q",
                     "type": "timestamp"
                 }
@@ -127,6 +132,7 @@ class TestPoll:
             "questions": [
                 {
                     "code":"q3",
+                    "display_name" : "q3",
                     "name": "auto q",
                     "type": "timestamp"
                 }
@@ -158,7 +164,7 @@ class TestPoll:
             "questions": [
                 {
                     "code": "q2",
-                    "name": "Can't depend on future question",
+                    "display_name": "Can't depend on future question",
                     "depends_on": "q1",
                     "type": {
                         "select": {
@@ -175,6 +181,7 @@ class TestPoll:
                 },
                 {
                     "code": "q1",
+                    "display_name" : "q1",
                     "type": {
                         "select": [
                             {"No": "😀 No"},
@@ -184,7 +191,7 @@ class TestPoll:
                 },
                 {
                     "code":"q3",
-                    "name": "Can't depend on q1",
+                    "display_name": "Can't depend on q1",
                     "type": "timestamp",
                     "depends_on": "q1"
                 }
@@ -249,7 +256,7 @@ class TestPoll:
             "questions": [
                 {
                     "code": "q2",
-                    "name": "Can't depend on future question",
+                    "display_name": "Can't depend on future question",
                     "depends_on": "q1",
                     "type": {
                         "select": {
@@ -266,6 +273,7 @@ class TestPoll:
                 },
                 {
                     "code": "q1",
+                    "display_name" : "q1",
                     "type": {
                         "select": [
                             {"No": "😀 No"},
@@ -321,6 +329,7 @@ class TestPoll:
             "questions": [
                 {
                     "code": "q1",
+                    "display_name" : "q1",
                     "type": {
                         "select": [
                             {"No": "😀 No"},
@@ -331,7 +340,7 @@ class TestPoll:
                 {
                     "code": "q2",
                     "depends_on": "q1",
-                    "name": "Can't depend on No/Yes select question",
+                    "display_name": "Can't depend on No/Yes select question",
                     "type": {
                         "select": {
                             "No1": [

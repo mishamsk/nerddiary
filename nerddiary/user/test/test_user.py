@@ -25,7 +25,7 @@ class TestUser:
                     {
                         "type": "relative_timestamp",
                         "code": "start_time",
-                        "name": "When did it start?",
+                        "display_name": "When did it start?",
                         "description": "Type in how many hours ago did it start aching"
                     },
                     {
@@ -36,7 +36,7 @@ class TestUser:
                             ]
                         },
                         "code": "finished",
-                        "name": "Has it finished?",
+                        "display_name": "Has it finished?",
                         "description": "If you still experience headche - answer No and I will ask again in 3 hours",
                         "ephemeral": true,
                         "delay_time": 2,
@@ -51,7 +51,7 @@ class TestUser:
                             ]
                         },
                         "code": "headache_type",
-                        "name": "What type of headache was it?",
+                        "display_name": "What type of headache was it?",
                         "description": "Choose among provided headache types"
                     },
                     {
@@ -63,7 +63,7 @@ class TestUser:
                             ]
                         },
                         "code": "drug_type",
-                        "name": "What drug did you use?",
+                        "display_name": "What drug did you use?",
                         "description": "Choose among provided drugs or select none if you did not take any"
                     },
                     {
@@ -83,7 +83,7 @@ class TestUser:
                             }
                         },
                         "code": "drug_dose",
-                        "name": "What dose?",
+                        "display_name": "What dose?",
                         "description": "Choose among provided drugs or select none if you did not take any",
                         "depends_on": "drug_type"
                     }
@@ -222,7 +222,7 @@ class TestUser:
                     {
                         "type": "relative_timestamp",
                         "code": "start_time",
-                        "name": "When did it start?"
+                        "display_name": "When did it start?"
                     }
                 ]
             },
@@ -232,7 +232,7 @@ class TestUser:
                     {
                         "type": "relative_timestamp",
                         "code": "start_time",
-                        "name": "When did it start?"
+                        "display_name": "When did it start?"
                     }
                 ]
             }
@@ -270,7 +270,7 @@ class TestUser:
                     {
                         "type": "relative_timestamp",
                         "code": "start_time",
-                        "name": "When did it start?"
+                        "display_name": "When did it start?"
                     }
                 ]
             },
@@ -281,7 +281,7 @@ class TestUser:
                     {
                         "type": "relative_timestamp",
                         "code": "start_time",
-                        "name": "When did it start?"
+                        "display_name": "When did it start?"
                     }
                 ]
             }

@@ -28,10 +28,8 @@ class Question(BaseModel):
     """Question mandatory short code name. Use it in depends_on
     """
 
-    name: Optional[str] = Field(
-        description="Question optional long name. Will be assigned the value of code if not given"
-    )
-    """Question optional long name. Will be assigned the value of code if not given
+    display_name: str = Field(description="Question short display name - what the user will be asked")
+    """Question short display name - what the user will be asked
     """
 
     description: Optional[str] = Field(description="Question optional long description")
@@ -64,9 +62,6 @@ class Question(BaseModel):
             self._type = QuestionType.supported_types[self.type]()
         else:
             self._type = self.type
-
-        if self.name is None:
-            self.name = self.code
 
     @validator("delay_on")
     def check_delay_time_if_delay_on(cls, v, values: Dict[str, Any]):
