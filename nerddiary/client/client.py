@@ -45,6 +45,10 @@ class NerdDiaryClient(AsyncApplication):
         self._sessions: t.Dict[str, UserSessionSchema] = {}
         self._notification_callback = notification_callback
 
+    @property
+    def connected(self) -> bool:
+        return self._ws is not None and self._ws.open
+
     async def _astart(self):
         self._logger.debug("Starting NerdDiary client")
         self._running = True
@@ -256,7 +260,6 @@ class NerdDiaryClient(AsyncApplication):
                     self._sessions[user_id] = ses
             else:
                 self._sessions[user_id] = ses
-                # TODO: if session is unlocked on the server - process polls (currently in start handler...)
         except ValidationError:
             self._logger.exception("Received incorrect session data from the server")
             raise RuntimeError("Received incorrect session data from the server")
@@ -268,13 +271,17 @@ class NerdDiaryClient(AsyncApplication):
         if not local_ses:
             try:
                 local_ses = await self.exec_api_method("get_session", user_id=str(user_id))
+                if not isinstance(local_ses, UserSessionSchema):
+                    self._logger.exception("Received incorrect session data from the server")
+                    return None
+
                 self._sessions[user_id] = local_ses
             except ValidationError:
                 self._logger.exception("Received incorrect session data from the server")
             except RPCError:
                 pass
 
-        return local_ses
+        return self._sessions[user_id]
 
     async def exec_api_method(self, method: str, **params) -> Schema | bool | None:
         try:
