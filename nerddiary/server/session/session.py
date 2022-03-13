@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import enum
 import logging
 
 from pydantic import ValidationError
 
 from ...data.data import DataConnection, DataProvider, IncorrectPasswordKeyError
+from ...error.error import NerdDiaryError, NerdDiaryErrorCode
 from ...poll.poll import Poll
 from ...poll.workflow import AddAnswerResult, PollWorkflow
 from ...user.user import User
@@ -23,39 +23,6 @@ from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
 
 SESSION_DATA_CATEGORY = "SESSION"
 CONFIG_DATA_CATEGORY = "CONFIG"
-
-
-class SessionErrorType(enum.Enum):
-    UNDEFINED = enum.auto()
-    SESSION_NO_LOCK = enum.auto()
-    DATA_PARSE_ERROR = enum.auto()
-    SESSION_INCORRECT_STATUS = enum.auto()
-    POLL_NOT_FOUND = enum.auto()
-    POLL_ANSWER_UNSUPPORTED_VALUE = enum.auto()
-
-
-class SessionError(Exception):
-    def __init__(self, type: SessionErrorType = SessionErrorType.UNDEFINED) -> None:
-        self.type = type
-        super().__init__(type)
-
-    def __str__(self) -> str:
-        mes = ""
-        match self.type:
-            case SessionErrorType.SESSION_NO_LOCK:
-                mes = "Data corruption: Session found but data lock is missing"
-            case SessionErrorType.DATA_PARSE_ERROR:
-                mes = "Data corruption: Error parsing session data"
-            case SessionErrorType.SESSION_INCORRECT_STATUS:
-                mes = "User has no configuration yet"
-            case SessionErrorType.POLL_NOT_FOUND:
-                mes = "Poll wasn't found"
-            case SessionErrorType.POLL_ANSWER_UNSUPPORTED_VALUE:
-                mes = "Unsupported value for a poll answer was provided"
-            case _:
-                mes = "Unspecified session error"
-
-        return f"Session error: {mes}"
 
 
 class UserSession:
@@ -75,19 +42,28 @@ class UserSession:
     def user_status(self) -> UserSessionStatus:
         return self._user_status
 
-    async def unlock(self, password_or_key: str | bytes) -> bool:
+    async def unlock(self, password_or_key: str | bytes):
         if self.user_status > UserSessionStatus.LOCKED:
-            return True
+            return
+
+        if self.user_status != UserSessionStatus.LOCKED:
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                ext_message="Session is not locked. Can't unlock",
+            )
 
         if self._data_connection:
-            raise RuntimeError("Data connection already existed when trying to unlock")
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INTERNAL_ERROR_INCORRECT_STATE,
+                ext_message="Data connection already existed when trying to unlock",
+            )
 
         try:
             self._data_connection = self._session_spawner._data_provoider.get_connection(
                 user_id=self.user_id, password_or_key=password_or_key
             )
         except IncorrectPasswordKeyError:
-            return False
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_INCORRECT_PASSWORD_OR_KEY)
 
         new_status = UserSessionStatus.UNLOCKED
         # TODO: FULL deserialize and proper exception handling for those who uses this method
@@ -99,27 +75,31 @@ class UserSession:
                 self._user_config = User.parse_raw(config)
                 new_status = UserSessionStatus.CONFIGURED
             except ValidationError:
-                raise SessionError(SessionErrorType.DATA_PARSE_ERROR)
+                raise NerdDiaryError(NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR)
 
         await self._set_status(new_status=new_status)
 
-        return True
-
     async def get_polls(self) -> List[Poll] | None:
         if not self.user_status >= UserSessionStatus.CONFIGURED:
-            raise SessionError(SessionErrorType.SESSION_INCORRECT_STATUS)
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                "List of polls requested, but user has no configuration yet.",
+            )
 
         return self._user_config.polls
 
     async def start_poll(self, poll_name: str) -> PollWorkflow:
         if not self.user_status >= UserSessionStatus.CONFIGURED:
-            raise SessionError(SessionErrorType.SESSION_INCORRECT_STATUS)
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                f"Request to start poll <{poll_name}>, but user has no configuration yet.",
+            )
 
         assert self._user_config
 
         poll = self._user_config._polls_dict.get(poll_name)
         if poll is None:
-            raise SessionError(SessionErrorType.POLL_NOT_FOUND)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND, poll_name)
 
         if poll.once_per_day:
             # TODO: also check current active
@@ -144,7 +124,7 @@ class UserSession:
 
         workflow = self._active_polls.get(poll_run_id)
         if workflow is None:
-            raise SessionError(SessionErrorType.POLL_NOT_FOUND)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
 
         res = workflow.add_answer(answer=answer)
         match res:
@@ -155,17 +135,22 @@ class UserSession:
                 # TODO: what are we doing on completion? probably nothing
                 pass
             case AddAnswerResult.ERROR:
-                raise SessionError(SessionErrorType.POLL_ANSWER_UNSUPPORTED_VALUE)
+                raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_ANSWER_UNSUPPORTED_VALUE)
 
         return workflow
 
-    async def set_config(self, config: str) -> bool:
+    async def set_config(self, config: str):
+        if not self.user_status >= UserSessionStatus.UNLOCKED:
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                "Can't set config. Session is new or locked.",
+            )
+
         try:
             self._user_config = User.parse_raw(config)
             await self._set_status(new_status=UserSessionStatus.CONFIGURED)
-            return True
         except ValidationError:
-            return False
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_INVALID_USER_CONFIGURATION)
 
     async def _set_status(self, new_status: UserSessionStatus):
         if self.user_status == new_status:
@@ -173,7 +158,7 @@ class UserSession:
 
         self._user_status = new_status
         await self._session_spawner.notify(
-            type=NotificationType.SESSION_UPDATE,
+            type=NotificationType.SERVER_SESSION_UPDATE,
             data=UserSessionSchema(
                 user_id=self.user_id, user_status=self.user_status, key=self._data_connection.key.decode()
             ),
@@ -207,16 +192,16 @@ class SessionSpawner:
     def get_all(self) -> Iterable[UserSession]:
         return self._sessions.values()
 
-    async def get(self, user_id: str) -> UserSession | None:
+    async def get(self, user_id: str) -> UserSession:
         if user_id in self._sessions:
             return self._sessions[user_id]
 
         try:
             self._sessions[user_id] = await self._load_or_create_session(user_id)
             return self._sessions[user_id]
-        except SessionError:
+        except NerdDiaryError:
             self._logger.exception("Error getting session")
-            return None
+            raise
 
     async def close(self) -> None:
         for session in self._sessions.values():
@@ -228,8 +213,8 @@ class SessionSpawner:
         for user_id in self._data_provoider.get_user_list():
             try:
                 sessions[user_id] = await self._load_or_create_session(user_id)
-            except SessionError as e:
-                self._logger.warning(f"Failed to load session, skipping. Reason: {str(e)}")
+            except NerdDiaryError as e:
+                self._logger.warning(f"Failed to load session, skipping. Reason: {e!r}")
 
         self._sessions = sessions
 
@@ -238,7 +223,8 @@ class SessionSpawner:
             for user_id, ses in self._sessions.items():
                 to_notify.append(
                     self.notify(
-                        NotificationType.SESSION_UPDATE, UserSessionSchema(user_id=user_id, user_status=ses.user_status)
+                        NotificationType.SERVER_SESSION_UPDATE,
+                        UserSessionSchema(user_id=user_id, user_status=ses.user_status),
                     )
                 )
 
@@ -258,10 +244,10 @@ class SessionSpawner:
     async def _load_or_create_session(self, user_id: str) -> UserSession:
         self._logger.debug("Loading session")
 
-        session_exists = self._data_provoider.check_user_data_exist(user_id=user_id, category=SESSION_DATA_CATEGORY)
+        session_exists = self._data_provoider.check_user_data_exist(user_id=user_id)
         lock_exists = self._data_provoider.check_lock_exist(user_id)
         if session_exists and not lock_exists:
-            raise SessionError(SessionErrorType.SESSION_NO_LOCK)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_NO_LOCK)
 
         self._logger.debug(f"Creating session. {session_exists=}")
         user_status = UserSessionStatus.LOCKED if session_exists else UserSessionStatus.NEW

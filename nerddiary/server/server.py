@@ -182,21 +182,23 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         ws = self._actve_connections[client_id]
         await ws.close()
         self._actve_connections.pop(client_id)
-        await self.notify(NotificationType.CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id)
+        await self.notify(
+            NotificationType.SERVER_CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id
+        )
 
     async def on_connect_client(self, client_id: str, websocket: WebSocket):
         await websocket.accept()
         self._logger.debug(f"{client_id=} connected to NerdDiary server")
         self._actve_connections[client_id] = websocket
         self._logger.debug(f"Notifying other clients about {client_id=}")
-        await self.notify(NotificationType.CLIENT_CONNECTED, ClientSchema(client_id=client_id), source=client_id)
+        await self.notify(NotificationType.SERVER_CLIENT_CONNECTED, ClientSchema(client_id=client_id), source=client_id)
         self._logger.debug(f"Sending {client_id=} all existing sessions. A total of {len(self._sessions._sessions)}")
         for session in self._sessions.get_all():
             key = None
             if session._data_connection:
                 key = session._data_connection.key.decode()
             await self.notify(
-                NotificationType.SESSION_UPDATE,
+                NotificationType.SERVER_SESSION_UPDATE,
                 UserSessionSchema(user_id=session.user_id, user_status=session.user_status, key=key),
                 target=client_id,
             )
@@ -204,7 +206,9 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
     async def on_disconnect_client(self, client_id: str):
         self._logger.debug(f"{client_id=} disconnected from NerdDiary server")
         self._actve_connections.pop(client_id)
-        await self.notify(NotificationType.CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id)
+        await self.notify(
+            NotificationType.SERVER_CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id
+        )
 
     async def broadcast(self, message: str, exclude: Set[str] = set()):
         for client_id, ws in self._actve_connections.items():

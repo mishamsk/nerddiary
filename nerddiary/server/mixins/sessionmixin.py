@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from nerddiary.server.session.status import UserSessionStatus
-
 from jsonrpcserver import Error, InvalidParams, Result, Success, method
 
+from ...error.error import NerdDiaryError
 from ..proto import ServerProtocol
-from ..rpc import RPCErrors
 from ..schema import UserSessionSchema
 
 
@@ -14,15 +12,17 @@ class SessionMixin:
     async def get_session(self: ServerProtocol, user_id: str) -> Result:
         self._logger.debug("Processing RPC call")
 
-        ses = await self._sessions.get(user_id)
-
-        if not ses:
-            return Error(RPCErrors.ERROR_GETTING_SESSION, "Internal error. Failed to retrieve session")
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
 
         ret = {
             "schema": "UserSessionSchema",
             "data": UserSessionSchema(user_id=ses.user_id, user_status=ses.user_status).dict(exclude_unset=True),
         }
+        self._logger.debug("Success")
         return Success(ret)
 
     @method  # type:ignore
@@ -31,10 +31,11 @@ class SessionMixin:
     ) -> Result:
         self._logger.debug("Processing RPC call")
 
-        ses = await self._sessions.get(user_id)
-
-        if not ses:
-            return Error(RPCErrors.SESSION_NOT_FOUND, "Session doesn't exist")
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
 
         bkey = None
         if key:
@@ -44,24 +45,29 @@ class SessionMixin:
         if not pass_or_key:
             return InvalidParams("Password or key must be present")
 
-        if not await ses.unlock(pass_or_key):
-            return Error(RPCErrors.SESSION_INCORRECT_PASSWORD_OR_KEY, "Incorrect password or key")
+        try:
+            await ses.unlock(pass_or_key)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
 
+        self._logger.debug("Success")
         return Success(True)
 
     @method  # type:ignore
     async def set_config(self: ServerProtocol, user_id: str, config: str) -> Result:
         self._logger.debug("Processing RPC call")
 
-        ses = await self._sessions.get(user_id)
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            return Error(err.code, err.message, err.data)
 
-        if not ses:
-            return Error(RPCErrors.SESSION_NOT_FOUND, "Session doesn't exist")
+        try:
+            await ses.set_config(config=config)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
 
-        if not ses.user_status > UserSessionStatus.LOCKED:
-            return Error(RPCErrors.SESSION_INCORRECT_STATUS, "Session is locked")
-
-        if await ses.set_config(config=config):
-            return Success(True)
-        else:
-            return InvalidParams("Configuration is not valid")
+        self._logger.debug("Success")
+        return Success(True)

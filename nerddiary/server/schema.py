@@ -18,9 +18,14 @@ def generate_notification(type: NotificationType, data: Schema | None = None) ->
 
 @enum.unique
 class NotificationType(enum.IntEnum):
-    CLIENT_CONNECTED = 10
-    CLIENT_DISCONNECTED = 20
-    SESSION_UPDATE = 30
+    SERVER_CLIENT_CONNECTED = 101
+    SERVER_CLIENT_DISCONNECTED = 102
+    SERVER_SESSION_UPDATE = 103
+    CLIENT_BEFORE_CONNECT = 201
+    CLIENT_ON_CONNECT = 202
+    CLIENT_CONNECT_FAILED = 203
+    CLIENT_BEFORE_DISCONNECT = 204
+    CLIENT_ON_DISCONNECT = 205
 
 
 class Schema(BaseModel):

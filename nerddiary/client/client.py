@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections import defaultdict
 from contextlib import suppress
 
 from jsonrpcclient.requests import request_uuid
@@ -14,20 +15,22 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK, Inv
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..client.config import NerdDiaryClientConfig
-from ..server.rpc import RPCErrors
+from ..error.error import NerdDiaryError, NerdDiaryErrorCode
 from ..server.schema import NotificationType, Schema, UserSessionSchema
 from ..server.session.status import UserSessionStatus
 from ..utils.sensitive import mask_sensitive
-from .rpc import AsyncRPCResult, RPCError
+from .rpc import AsyncRPCResult
 
 import typing as t
+
+
+class StopNotificationPropagation(Exception):
+    pass
 
 
 class NerdDiaryClient(AsyncApplication):
     def __init__(
         self,
-        notification_callback: t.Callable[[NotificationType, t.Dict[str, t.Any]], t.Coroutine[t.Any, t.Any, None]]
-        | None = None,
         *,
         config: NerdDiaryClientConfig = NerdDiaryClientConfig(),
         loop: asyncio.AbstractEventLoop | None = None,
@@ -43,11 +46,28 @@ class NerdDiaryClient(AsyncApplication):
         self._message_dispatcher: asyncio.Task | None = None
         self._rpc_calls: t.Dict[uuid.UUID, AsyncRPCResult] = {}
         self._sessions: t.Dict[str, UserSessionSchema] = {}
-        self._notification_callback = notification_callback
+        self._notification_handlers: t.DefaultDict[
+            NotificationType,
+            t.List[t.Callable[[NotificationType, t.Dict[str, t.Any] | None], t.Coroutine[t.Any, t.Any, None]]],
+        ] = defaultdict(list)
+        self._notification_handler_tasks: t.Set[asyncio.Task] = set()
 
     @property
     def connected(self) -> bool:
         return self._ws is not None and self._ws.open
+
+    def on(self, notification_type: NotificationType):
+        """Decorator used to add notification handler. Handler must accept two arguments: `NotificationType` and a data dict
+
+        Args:
+            notification_type (NotificationType): notification type to handle
+        """
+
+        def decorator(f):
+            self._notification_handlers[notification_type].append(f)
+            return f
+
+        return decorator
 
     async def _astart(self):
         self._logger.debug("Starting NerdDiary client")
@@ -75,6 +95,14 @@ class NerdDiaryClient(AsyncApplication):
                 pending_call._fut.cancel()
                 self._rpc_calls.pop(id)
 
+            # Cancel all notification handler tasks
+            for task in self._notification_handler_tasks:
+                if not task.done() and task.cancel():
+                    self._logger.debug(f"Waiting for {task!r} to gracefully finish")
+                    await task
+            # Clearing handler task list
+            self._notification_handler_tasks = set()
+
             # Disconnect websocket
             await self._disconnect()
 
@@ -84,6 +112,7 @@ class NerdDiaryClient(AsyncApplication):
         async with self._connect_lock:
             retry = 0
 
+            await self._process_notification(NotificationType.CLIENT_BEFORE_CONNECT)
             while (
                 self._running and (self._ws is None or not self._ws.open) and retry < self._config.max_connect_retries
             ):
@@ -120,8 +149,10 @@ class NerdDiaryClient(AsyncApplication):
                 err = f"Failed to connect to NerdDiary server after {retry * self._config.reconnect_timeout} seconds (over {retry} retries). Closing client"
                 self._logger.error(err)
                 await self.aclose()
+                await self._process_notification(NotificationType.CLIENT_CONNECT_FAILED)
                 return False
 
+            await self._process_notification(NotificationType.CLIENT_ON_CONNECT)
             self._logger.debug(
                 f"Succesfully connected to NerdDiary server at <{self._config.server_uri}>, on try #{str(retry+1)}"
             )
@@ -130,7 +161,9 @@ class NerdDiaryClient(AsyncApplication):
     async def _disconnect(self):
         if self._ws is not None:
             self._logger.debug(f"Disconnecting from NerdDiary server at <{self._config.server_uri}>")
+            await self._process_notification(NotificationType.CLIENT_BEFORE_DISCONNECT)
             await self._ws.close()
+            await self._process_notification(NotificationType.CLIENT_ON_DISCONNECT)
 
     async def _run_rpc(
         self,
@@ -169,7 +202,7 @@ class NerdDiaryClient(AsyncApplication):
             return res
         except asyncio.CancelledError:
             pass
-        except RPCError:
+        except NerdDiaryError:
             raise
         except Exception:
             err = "Unexpected exception while waiting for rpc call result"
@@ -182,6 +215,13 @@ class NerdDiaryClient(AsyncApplication):
         self._logger.debug("Starting message dispatcher")
 
         while self._running:
+            # Purge completed notification handler tasks
+            to_remove = set()
+            for task in self._notification_handler_tasks:
+                if task.done():
+                    to_remove.add(task)
+            self._notification_handler_tasks -= to_remove
+
             try:
                 raw_response = await self._ws.recv()
                 self._logger.debug(f"Recieved message <{mask_sensitive(str(raw_response))}>")
@@ -191,23 +231,14 @@ class NerdDiaryClient(AsyncApplication):
                     # Process notification
                     try:
                         n_type = NotificationType(int(parsed_response["notification"]))
+                        self._logger.debug(f"Recieved <{n_type.name}> notification. Scheduling processing")
+                        self._notification_handler_tasks.add(
+                            asyncio.create_task(self._process_notification(n_type, parsed_response["data"]))
+                        )
                     except ValueError:
-                        n_type = -1
-
-                    match n_type:
-                        case -1:
-                            self._logger.debug(
-                                f"Recieved unsupported notification <{parsed_response['notification']}>. Ignoring"
-                            )
-                        case NotificationType.SESSION_UPDATE:
-                            self._logger.debug("Recieved session update. Processing")
-                            asyncio.create_task(self._process_session_update(parsed_response["data"]))
-                            if self._notification_callback:
-                                asyncio.create_task(self._notification_callback(n_type, parsed_response["data"]))
-                        case _:
-                            self._logger.debug(f"Recieved <{n_type.name}> notification. Processing")
-                            if self._notification_callback:
-                                asyncio.create_task(self._notification_callback(n_type, parsed_response["data"]))
+                        self._logger.debug(
+                            f"Recieved unsupported notification <{parsed_response['notification']}>. Ignoring"
+                        )
                 else:
                     # Process RPC call response
                     match parse(parsed_response):
@@ -230,7 +261,9 @@ class NerdDiaryClient(AsyncApplication):
                                 self._logger.warning("RPC call response came too late from the server")
                                 continue
 
-                            self._rpc_calls[id]._fut.set_exception(RPCError(code, message, data))
+                            self._rpc_calls[id]._fut.set_exception(
+                                NerdDiaryError(NerdDiaryErrorCode(code), message, data)
+                            )
             except ConnectionClosedOK:
                 if not await self._connect():
                     return
@@ -247,22 +280,33 @@ class NerdDiaryClient(AsyncApplication):
     def _stop(self):
         self._running = False
 
-    async def _process_session_update(self, raw_ses: t.Dict[str, t.Any]):
-        try:
-            ses = UserSessionSchema.parse_obj(raw_ses)
-            user_id = ses.user_id
+    async def _process_notification(self, n_type: NotificationType, raw_data: t.Dict[str, t.Any] | None = None):
+        # If this is a session update from the server, we need to store it and optionally unlock
+        if n_type == NotificationType.SERVER_SESSION_UPDATE:
+            try:
+                ses = UserSessionSchema.parse_obj(raw_data)
+                user_id = ses.user_id
 
-            local_ses = self._sessions.get(user_id)
-            if local_ses:
-                if ses.user_status == UserSessionStatus.LOCKED and local_ses.user_status > UserSessionStatus.LOCKED:
-                    await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key})
+                local_ses = self._sessions.get(user_id)
+                if local_ses:
+                    self._logger.debug("Found an existing session on client")
+                    if ses.user_status == UserSessionStatus.LOCKED and local_ses.user_status > UserSessionStatus.LOCKED:
+                        self._logger.debug("Client has unlocked session, while server is not - unlocking")
+                        await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key})
+                    else:
+                        self._sessions[user_id] = ses
                 else:
                     self._sessions[user_id] = ses
-            else:
-                self._sessions[user_id] = ses
-        except ValidationError:
-            self._logger.exception("Received incorrect session data from the server")
-            raise RuntimeError("Received incorrect session data from the server")
+            except ValidationError:
+                self._logger.exception("Received incorrect session data from the server")
+
+        for handler in self._notification_handlers[n_type]:
+            try:
+                await handler(n_type, raw_data)
+            except StopNotificationPropagation:
+                pass
+            except Exception:
+                self._logger.exception("Exception during notification handling")
 
     async def get_session(self, user_id: str) -> UserSessionSchema | None:
         assert isinstance(user_id, str)
@@ -278,7 +322,7 @@ class NerdDiaryClient(AsyncApplication):
                 self._sessions[user_id] = local_ses
             except ValidationError:
                 self._logger.exception("Received incorrect session data from the server")
-            except RPCError:
+            except NerdDiaryError:
                 pass
 
         return self._sessions[user_id]
@@ -318,8 +362,8 @@ class NerdDiaryClient(AsyncApplication):
                 self._logger.exception(err)
                 return None
 
-        except RPCError as r_err:
-            if r_err.code > RPCErrors.ERROR_SERVER_ERROR:
+        except NerdDiaryError as r_err:
+            if r_err.code > NerdDiaryErrorCode.RPC_SERVER_ERROR:
                 raise
             else:
                 err = f"Unexpected RPCError during execution of remote {method=}"

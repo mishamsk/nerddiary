@@ -1,17 +1,7 @@
 import asyncio
 import uuid
 
-from ..server.rpc import RPCErrors
-
 import typing as t
-
-
-class RPCError(Exception):
-    def __init__(self, code: int, message: str, data: t.Any, *args: object) -> None:
-        self.code = RPCErrors(code)
-        self.message = message
-        self.data = data
-        super().__init__(*args)
 
 
 class AsyncRPCResult:
