@@ -56,8 +56,13 @@ class QuestionType(BaseModel, abc.ABC):
 
     @property
     def is_dependent(self) -> bool:
-        """Returns True if attribute types possible values are dependent on another value"""
+        """Returns True if question type's possible values are dependent on another value"""
         return self._must_depend
+
+    @property
+    def allows_manual(self) -> bool:
+        """Returns True if question type allows arbitrary manual value as input"""
+        return not self._must_depend and self.get_answer_options() is None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -241,7 +246,8 @@ class RelativeTimestampType(QuestionType):
 
         self._auto = False
         self._must_depend = False
-        self.value_hint = "[ДД дня/день/дней, ][ЧЧ[:ММ[:СС]]"
+        # TODO: make translatable
+        self.value_hint = "Примеры: 2, значит 2 часа назад; 3 дня, 2:12, значит 3 дня 2 часа 12 минут назад. Полный фомат: [ДД дня/день/дней, ][ЧЧ[:ММ[:СС]]"
 
     @staticmethod
     def _parse_duration(value: str) -> datetime.timedelta:

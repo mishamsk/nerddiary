@@ -379,3 +379,62 @@ class TestPoll:
 
         # all errors caught
         assert len(must_error) == 0
+
+        # Incorrect dependency (dependent on ephemeral)
+        json = """
+        {
+            "poll_name": "tok",
+            "questions": [
+                {
+                    "code": "q1",
+                    "display_name" : "q1",
+                    "ephemeral": "True",
+                    "type": {
+                        "select": [
+                            {"No": "😀 No"},
+                            {"Yes": "😭 Yes"}
+                        ]
+                    }
+                },
+                {
+                    "code": "q2",
+                    "depends_on": "q1",
+                    "display_name": "Can't depend on ephemeral question",
+                    "type": {
+                        "select": {
+                            "No": [
+                                {"NoNo": "😀 No"},
+                                {"NoYes": "😭 Yes"}
+                            ],
+                            "Yes": [
+                                {"YesNo": "😀 No"},
+                                {"YesYes": "😭 Yes"}
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+        """
+
+        with pytest.raises(ValidationError) as err:
+            Poll.parse_raw(json)
+        assert err.type == ValidationError
+
+        must_error = {
+            "questions",
+        }
+        for v_err in err.value.errors():
+            match v_err["loc"]:
+                case ("questions",) as mtch:
+                    assert (
+                        v_err["type"] == "value_error"
+                        and v_err["msg"]
+                        == "Question <Can't depend on ephemeral question> can not depend on an ephemeral question <q1>"
+                    )
+                    must_error.remove(mtch[0])
+                case _ as mtch:
+                    assert False, f"Unexpected error caught: {str(mtch)}"
+
+        # all errors caught
+        assert len(must_error) == 0

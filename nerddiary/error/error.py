@@ -17,6 +17,8 @@ class NerdDiaryErrorCode(enum.IntEnum):
     SESSION_POLL_ANSWER_UNSUPPORTED_VALUE = -107
     SESSION_POLL_RUN_ID_NOT_FOUND = -109
     SESSION_INVALID_USER_CONFIGURATION = -110
+    # Workflow
+    WORKFLOW_FAILED_DESERIALIZE = -201
     # XML-RPC Error codes
     RPC_PARSE_ERROR = -32700
     RPC_INVALID_REQUEST = -32600
@@ -29,13 +31,14 @@ class NerdDiaryErrorCode(enum.IntEnum):
 ND_ERROR_MESSAGES = {
     NerdDiaryErrorCode.SESSION_INTERNAL_ERROR_INCORRECT_STATE: "System error, incorrect internal state: {}",
     NerdDiaryErrorCode.SESSION_NO_LOCK: "Data corruption: Session found but data lock is missing",
-    NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR: "Data corruption: Error parsing session data",
+    NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR: "Data corruption: Error parsing session data category <{}>",
     NerdDiaryErrorCode.SESSION_INCORRECT_STATUS: "Inccorect session status: {}",
     NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND: "Poll with the name <{}> wasn't found",
     NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND: "Poll with run id <{}> wasn't found",
     NerdDiaryErrorCode.SESSION_POLL_ANSWER_UNSUPPORTED_VALUE: "Unsupported poll answer value was provided",
     NerdDiaryErrorCode.SESSION_INCORRECT_PASSWORD_OR_KEY: "Incorrect password or key",
     NerdDiaryErrorCode.SESSION_INVALID_USER_CONFIGURATION: "User configuration file is not valid",
+    NerdDiaryErrorCode.WORKFLOW_FAILED_DESERIALIZE: "Data corruption: Error parsing serialized workflow data",
     NerdDiaryErrorCode.UNDEFINED: "Unspecified session error",
 }
 

@@ -89,6 +89,22 @@ class Poll(BaseModel):
 
         return v
 
+    @validator("questions")
+    def dependant_question_cannot_depend_on_ephemeral(cls, v: List[Question]):
+        # Check that dependant question exists and has already been processed (comes earlier)
+        q_dict: Dict[str, Question] = {}
+        for q in v:
+            q_dict |= {q.code: q}
+
+        for name, question in q_dict.items():
+            if question.depends_on:
+                if q_dict[question.depends_on].ephemeral:
+                    raise ValueError(
+                        f"Question <{question.display_name}> can not depend on an ephemeral question <{question.depends_on}>"
+                    )
+
+        return v
+
     @validator("questions", each_item=True)
     def dependant_question_type_must_support_it(cls, v: Question):
         # Check that dependant question exists and has already been processed (comes earlier)

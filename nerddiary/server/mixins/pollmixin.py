@@ -57,7 +57,7 @@ class PollMixin:
             return Error(err.code, err.message, err.data)
 
         select_list = None
-        options = poll_workflow.current_question._type.get_answer_options()
+        options = poll_workflow.current_question_select_list
         if options:
             select_list = {vl.value: vl.label for vl in options}
 
@@ -67,12 +67,12 @@ class PollMixin:
                 poll_run_id=poll_workflow.poll_run_id,
                 completed=poll_workflow.completed,
                 delayed=poll_workflow.delayed,
+                delayed_for=poll_workflow.delayed_for,
                 current_question=poll_workflow.current_question.display_name,
                 current_question_index=poll_workflow.current_question_index,
                 current_question_description=poll_workflow.current_question.description,
                 current_question_value_hint=poll_workflow.current_question._type.value_hint,
-                # TODO: switch to type attribute
-                current_question_allow_manual_answer=options is None,
+                current_question_allow_manual_answer=poll_workflow.current_question._type.allows_manual,
                 current_question_select_list=select_list,
                 questions=[q.display_name for q in poll_workflow.questions if q.ephemeral is False],
                 answers=[a.label for a in poll_workflow.answers],
@@ -100,7 +100,7 @@ class PollMixin:
             return Error(err.code, err.message, err.data)
 
         select_list = None
-        options = poll_workflow.current_question._type.get_answer_options()
+        options = poll_workflow.current_question_select_list
         if options:
             select_list = {vl.value: vl.label for vl in options}
 
@@ -110,12 +110,12 @@ class PollMixin:
                 poll_run_id=poll_workflow.poll_run_id,
                 completed=poll_workflow.completed,
                 delayed=poll_workflow.delayed,
+                delayed_for=poll_workflow.delayed_for,
                 current_question=poll_workflow.current_question.display_name,
                 current_question_index=poll_workflow.current_question_index,
                 current_question_description=poll_workflow.current_question.description,
                 current_question_value_hint=poll_workflow.current_question._type.value_hint,
-                # TODO: switch to type attribute
-                current_question_allow_manual_answer=options is None,
+                current_question_allow_manual_answer=poll_workflow.current_question._type.allows_manual,
                 current_question_select_list=select_list,
                 questions=[q.display_name for q in poll_workflow.questions if q.ephemeral is False],
                 answers=[a.label for a in poll_workflow.answers],
@@ -123,3 +123,22 @@ class PollMixin:
         }
         self._logger.debug("Success")
         return Success(ret)
+
+    @method  # type:ignore
+    async def close_poll(self: ServerProtocol, user_id: str, poll_run_id: str, save: bool) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        try:
+            await ses.close_poll(poll_run_id=poll_run_id, save=save)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        self._logger.debug("Success")
+        return Success(True)

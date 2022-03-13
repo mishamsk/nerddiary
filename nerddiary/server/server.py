@@ -25,7 +25,6 @@ from typing import Dict, Set, Tuple
 class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
     def __init__(
         self,
-        session: str | SessionSpawner = "default",
         config: NerdDiaryServerConfig = NerdDiaryServerConfig(),
         loop: asyncio.AbstractEventLoop | None = None,
         logger: logging.Logger = logging.getLogger(__name__),
@@ -43,14 +42,12 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         ] = asyncio.Queue()
         self._notification_dispatcher = None
 
-        if isinstance(session, str):
-            self._sessions = SessionSpawner(
-                data_provider=self._data_provider,
-                notification_queue=self._notification_queue,
-                logger=self._logger.getChild("sessions"),
-            )
-        else:
-            self._sessions = session
+        self._sessions = SessionSpawner(
+            data_provider=self._data_provider,
+            notification_queue=self._notification_queue,
+            scheduler=self._scheduler,
+            logger=self._logger.getChild("sessions"),
+        )
 
         self._actve_connections: Dict[str, WebSocket] = {}
         self._message_queue: asyncio.Queue[Tuple[str, str]] = asyncio.Queue()

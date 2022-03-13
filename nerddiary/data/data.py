@@ -183,19 +183,28 @@ class DataConnection(ABC):
         pass  # pragma: no cover
 
     @abstractmethod
-    def append_log(self, poll_code: str, log: str) -> bool:
-        """Appends a single serialized `log` for a given `poll_code`"""
+    def append_log(self, poll_code: str, poll_ts: datetime.datetime, log: str) -> bool:
+        """Appends a single serialized `log` for a given `poll_code`
+
+        Args:
+            poll_code (str): poll code
+            poll_ts (datetime.datetime): poll timestamp - the date to which this log belongs
+            log (str): seriazlized poll answers (log)
+
+        Returns:
+            bool: 'True' if append was succesful
+        """
         pass  # pragma: no cover
 
-    def update_log(self, id: Any, log: str) -> bool:
+    def update_log(self, id: int, poll_ts: datetime.datetime | None = None, log: str | None = None) -> bool:
         """Updates a log identified by `id` with a new serialized `log`"""
         raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
-    def get_all_logs(self) -> List[Tuple[Any, str]]:
+    def get_all_logs(self) -> List[Tuple[int, datetime.datetime, str]]:
         """Get all serialized logs"""
         raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
-    def get_log(self, id: Any) -> Tuple[Any, str]:
+    def get_log(self, id: int) -> Tuple[int, datetime.datetime, str]:
         """Get a single serialized log identified by `id`"""
         ret = self.get_logs([id])
         if len(ret) == 1:
@@ -205,8 +214,8 @@ class DataConnection(ABC):
 
     def get_logs(
         self,
-        ids: List[Any],
-    ) -> List[Tuple[Any, str]]:
+        ids: List[int],
+    ) -> List[Tuple[int, datetime.datetime, str]]:
         """Get a list of serialized logs identified by `ids`"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
@@ -216,14 +225,16 @@ class DataConnection(ABC):
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
-    ) -> List[Tuple[Any, str]]:
+    ) -> List[Tuple[int, datetime.datetime, str]]:
         """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
-    def get_last_n_logs(self, poll_code: str, count: int) -> List[Tuple[Any, str]]:
+    def get_last_n_logs(self, poll_code: str, count: int) -> List[Tuple[int, datetime.datetime, str]]:
         return self.get_poll_logs(poll_code, max_rows=count)
 
-    def get_last_logs(self, poll_code: str, date_from: datetime.datetime, max_rows: int) -> List[Tuple[Any, str]]:
+    def get_last_logs(
+        self, poll_code: str, date_from: datetime.datetime, max_rows: int
+    ) -> List[Tuple[int, datetime.datetime, str]]:
         return self.get_poll_logs(poll_code, date_from=date_from, max_rows=max_rows)
 
 
@@ -336,6 +347,7 @@ class SQLLiteConnection(DataConnection):
             meta,
             sa.Column("id", sa.Integer, primary_key=True, index=True, nullable=False),
             sa.Column("poll_code", sa.String, index=True, unique=False, nullable=False),
+            sa.Column("poll_ts", sa.DATETIME, index=True, unique=False, nullable=False),
             sa.Column("log", BLOB, nullable=False),
             sa.Column("created_ts", sa.DATETIME, nullable=False),
             sa.Column("updated_ts", sa.DATETIME, nullable=False),
@@ -408,7 +420,7 @@ class SQLLiteConnection(DataConnection):
             else:
                 return None
 
-    def append_log(self, poll_code: str, log: str) -> int | None:
+    def append_log(self, poll_code: str, poll_ts: datetime.datetime, log: str) -> int | None:
         now = datetime.datetime.now()
 
         log_out = self._encryption_provider.encrypt(log.encode())
@@ -417,6 +429,7 @@ class SQLLiteConnection(DataConnection):
             values={
                 "log": log_out,
                 "poll_code": poll_code,
+                "poll_ts": poll_ts,
                 "created_ts": now,
                 "updated_ts": now,
             }
@@ -430,7 +443,7 @@ class SQLLiteConnection(DataConnection):
             else:
                 return None
 
-    def _query_and_decrypt(self, stmt: Select) -> List[Tuple[Any, str]]:
+    def _query_and_decrypt(self, stmt: Select) -> List[Tuple[int, datetime.datetime, str]]:
         ret = []
         with self._engine.connect() as conn:
             result = conn.execute(stmt)
@@ -440,6 +453,7 @@ class SQLLiteConnection(DataConnection):
                 ret.append(
                     (
                         row.id,
+                        row.poll_ts,
                         self._encryption_provider.decrypt(row.log).decode(),
                     )
                 )
@@ -448,18 +462,21 @@ class SQLLiteConnection(DataConnection):
 
     def get_logs(
         self,
-        ids: List[Any],
-    ) -> List[Tuple[Any, str]]:
+        ids: List[int],
+    ) -> List[Tuple[int, datetime.datetime, str]]:
         stmt = self._poll_log_table.select().where(self._poll_log_table.c.id.in_(ids))
 
         return self._query_and_decrypt(stmt)
 
-    def update_log(self, id: Any, log: str) -> bool:
+    def update_log(self, id: Any, poll_ts: datetime.datetime | None = None, log: str | None = None) -> bool:
         now = datetime.datetime.now()
 
-        log_out = self._encryption_provider.encrypt(log.encode())
-
-        stmt = self._poll_log_table.update().where(self._poll_log_table.c.id == id).values(log=log_out, updated_ts=now)
+        stmt = self._poll_log_table.update().where(self._poll_log_table.c.id == id).values(updated_ts=now)
+        if log is not None:
+            log_out = self._encryption_provider.encrypt(log.encode())
+            stmt = stmt.values(log=log_out)
+        if poll_ts is not None:
+            stmt = stmt.values(poll_ts=poll_ts)
 
         with self._engine.connect() as conn:
             result = conn.execute(stmt)
@@ -469,7 +486,7 @@ class SQLLiteConnection(DataConnection):
             else:
                 return False
 
-    def get_all_logs(self) -> List[Tuple[Any, str]]:
+    def get_all_logs(self) -> List[Tuple[int, datetime.datetime, str]]:
         stmt = self._poll_log_table.select()
 
         return self._query_and_decrypt(stmt)
@@ -480,14 +497,14 @@ class SQLLiteConnection(DataConnection):
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
-    ) -> List[Tuple[Any, str]]:
+    ) -> List[Tuple[int, datetime.datetime, str]]:
         stmt = self._poll_log_table.select().where(self._poll_log_table.c.poll_code == poll_code)
 
         if date_from:
-            stmt = stmt.where(self._poll_log_table.c.created_ts >= date_from)
+            stmt = stmt.where(self._poll_log_table.c.poll_ts >= date_from)
 
         if date_to:
-            stmt = stmt.where(self._poll_log_table.c.created_ts <= date_to)
+            stmt = stmt.where(self._poll_log_table.c.poll_ts <= date_to)
 
         if max_rows:
             stmt = stmt.limit(max_rows)

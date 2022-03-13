@@ -119,7 +119,7 @@ class TestDataProvider:
         conn = test_data_provider.get_connection(user_id=mockuser_id, password_or_key=mock_password)
 
         # store log and drop lock
-        conn.append_log("poll", "log")
+        conn.append_log("poll", datetime.datetime.now(), "log")
         test_data_provider._params.base_path.joinpath(mockuser_id, "lock").unlink()
 
         with pytest.raises(DataCorruptionError) as err:
@@ -214,17 +214,22 @@ class TestSQLLiteConnection:
         poll_code_1 = "poll1"
         poll_code_2 = "poll2"
         row_data_base = "some"
+        now = datetime.datetime.now()
 
         poll_1_values = []
+        poll_1_poll_tss = []
         for i in range(1, 10):
             poll_1_values.append(row_data_base + str(i))
-            id = conn.append_log(poll_code_1, row_data_base + str(i))
+            poll_1_poll_tss.append(now - datetime.timedelta(days=i - 1))
+            id = conn.append_log(poll_code_1, now - datetime.timedelta(days=i - 1), row_data_base + str(i))
             assert id == i
 
         poll_2_values = []
+        poll_2_poll_tss = []
         for i in range(10, 20):
             poll_2_values.append(row_data_base + str(i))
-            id = conn.append_log(poll_code_2, row_data_base + str(i))
+            poll_2_poll_tss.append(now - datetime.timedelta(days=i - 10))
+            id = conn.append_log(poll_code_2, now - datetime.timedelta(days=i - 10), row_data_base + str(i))
             assert id == i
 
         # Test data is encrypted at rest
@@ -257,7 +262,7 @@ class TestSQLLiteConnection:
         # Check get_all_logs
         all_logs = conn.get_all_logs()
         assert len(all_logs) == len(poll_1_values) + len(poll_2_values)
-        assert set(map(lambda x: x[1], all_logs)) == set(poll_1_values + poll_2_values)
+        assert set(map(lambda x: x[2], all_logs)) == set(poll_1_values + poll_2_values)
 
         # Check get_last_n_logs
         test_logs = conn.get_last_n_logs("unknown_poll", 1)
@@ -265,10 +270,10 @@ class TestSQLLiteConnection:
 
         test_logs = conn.get_last_n_logs(poll_code_1, 1)
         assert len(test_logs) == 1
-        test_id, test_log = test_logs[0]
+        test_id, test_poll_ts, test_log = test_logs[0]
 
         # Check get_logs
-        assert conn.get_log(test_id) == (test_id, poll_1_values[0])
+        assert conn.get_log(test_id) == (test_id, now, poll_1_values[0])
 
         # Check get_logs
         test_logs = conn.get_last_n_logs(poll_code_1, 5)
@@ -276,32 +281,50 @@ class TestSQLLiteConnection:
 
         test_ids = list(map(lambda x: x[0], test_logs))
 
-        assert conn.get_logs(test_ids) == list(zip(test_ids, poll_1_values))
+        assert conn.get_logs(test_ids) == list(zip(test_ids, poll_1_poll_tss, poll_1_values))
 
         # Check get_last_logs
+        test_logs = conn.get_last_logs(
+            poll_code_1,
+            date_from=datetime.datetime.now() - datetime.timedelta(days=3),
+            max_rows=3,
+        )
+        assert len(test_logs) == 3
+
         test_logs = conn.get_last_logs(
             poll_code_1,
             date_from=datetime.datetime.now() - datetime.timedelta(days=1),
             max_rows=3,
         )
-        assert len(test_logs) == 3
+        assert len(test_logs) == 1
 
         test_ids = list(map(lambda x: x[0], test_logs))
 
-        assert conn.get_logs(test_ids) == list(zip(test_ids, poll_1_values))
+        assert conn.get_logs(test_ids) == list(zip(test_ids, poll_1_poll_tss, poll_1_values))
 
         # Check get_poll_logs
         test_logs = conn.get_poll_logs(
             poll_code_1,
-            date_to=datetime.datetime.now() - datetime.timedelta(days=1),
+            date_to=datetime.datetime.now() - datetime.timedelta(days=10),
             max_rows=3,
         )
         assert len(test_logs) == 0
 
+        test_logs = conn.get_poll_logs(
+            poll_code_1,
+            date_to=datetime.datetime.now() - datetime.timedelta(days=8),
+            max_rows=3,
+        )
+        assert len(test_logs) == 1
+
         # Check update_log
-        test_id, test_log = conn.get_last_n_logs(poll_code_1, 1)[0]
-        conn.update_log(test_id, "new data")
-        assert conn.get_log(test_id)[1] == "new data"
+        test_id, test_poll_ts, test_log = conn.get_last_n_logs(poll_code_1, 1)[0]
+        conn.update_log(test_id, log="new data")
+        assert conn.get_log(test_id)[2] == "new data"
+        assert conn.get_log(test_id)[1] == test_poll_ts
+        conn.update_log(test_id, poll_ts=test_poll_ts - datetime.timedelta(days=10))
+        assert conn.get_log(test_id)[2] == "new data"
+        assert conn.get_log(test_id)[1] == test_poll_ts - datetime.timedelta(days=10)
 
         # Double check data is still encrypted
         with engine.connect() as econn:

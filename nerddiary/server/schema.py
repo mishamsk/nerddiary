@@ -21,6 +21,7 @@ class NotificationType(enum.IntEnum):
     SERVER_CLIENT_CONNECTED = 101
     SERVER_CLIENT_DISCONNECTED = 102
     SERVER_SESSION_UPDATE = 103
+    SERVER_POLL_DELAY_PASSED = 104
     CLIENT_BEFORE_CONNECT = 201
     CLIENT_ON_CONNECT = 202
     CLIENT_CONNECT_FAILED = 203
@@ -52,10 +53,15 @@ class PollsSchema(Schema):
     polls: List[PollBaseSchema]
 
 
+class PollWorkflowSchema(Schema):
+    poll_run_id: str
+
+
 class PollWorkflowStateSchema(Schema):
     poll_run_id: str
     completed: bool
     delayed: bool
+    delayed_for: str
     current_question: str
     current_question_index: int
     current_question_description: str | None
