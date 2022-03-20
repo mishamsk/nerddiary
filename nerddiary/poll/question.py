@@ -84,7 +84,7 @@ class Question(BaseModel):
             if not isinstance(pos_values, list):
                 raise ValueError(f"`dalay_on` value is not compatible with <{type.type}>")
 
-            serialized_pos_values = list(map(type.get_serializable_value, pos_values))
+            serialized_pos_values = list(map(type.serialize_value, pos_values))
             if any(delay_value not in serialized_pos_values for delay_value in v):
                 raise ValueError(f"`dalay_on` value doesn't exist for the type {type.__class__}")
 

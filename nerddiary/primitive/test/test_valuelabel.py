@@ -12,12 +12,6 @@ class TestValueLabel:
         assert err.type is ValidationError
         assert err.value.errors()[0]["type"] == "value_error.missing"
 
-    def test_auto_value(self):
-        value = "100"
-        vl = ValueLabel(label=value)
-
-        assert vl.value == value
-
     def test_shorthand_format(self):
         value = "100"
         label = "Super 100"

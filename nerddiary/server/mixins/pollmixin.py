@@ -56,11 +56,6 @@ class PollMixin:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
 
-        select_list = None
-        options = poll_workflow.current_question_select_list
-        if options:
-            select_list = {vl.value: vl.label for vl in options}
-
         ret = {
             "schema": "PollWorkflowStateSchema",
             "data": PollWorkflowStateSchema(
@@ -73,7 +68,7 @@ class PollMixin:
                 current_question_description=poll_workflow.current_question.description,
                 current_question_value_hint=poll_workflow.current_question._type.value_hint,
                 current_question_allow_manual_answer=poll_workflow.current_question._type.allows_manual,
-                current_question_select_list=select_list,
+                current_question_select_list=poll_workflow.current_question_select_list,
                 questions=[q.display_name for q in poll_workflow.questions if q.ephemeral is False],
                 answers=[a.label for a in poll_workflow.answers],
             ).dict(exclude_unset=True),
@@ -99,11 +94,6 @@ class PollMixin:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
 
-        select_list = None
-        options = poll_workflow.current_question_select_list
-        if options:
-            select_list = {vl.value: vl.label for vl in options}
-
         ret = {
             "schema": "PollWorkflowStateSchema",
             "data": PollWorkflowStateSchema(
@@ -116,7 +106,7 @@ class PollMixin:
                 current_question_description=poll_workflow.current_question.description,
                 current_question_value_hint=poll_workflow.current_question._type.value_hint,
                 current_question_allow_manual_answer=poll_workflow.current_question._type.allows_manual,
-                current_question_select_list=select_list,
+                current_question_select_list=poll_workflow.current_question_select_list,
                 questions=[q.display_name for q in poll_workflow.questions if q.ephemeral is False],
                 answers=[a.label for a in poll_workflow.answers],
             ).dict(exclude_unset=True),

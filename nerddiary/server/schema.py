@@ -7,9 +7,10 @@ import json
 
 from pydantic import BaseModel
 
+from ..primitive.valuelabel import ValueLabel
 from .session.status import UserSessionStatus
 
-from typing import Dict, List
+from typing import List
 
 
 def generate_notification(type: NotificationType, data: Schema | None = None) -> str:
@@ -67,6 +68,6 @@ class PollWorkflowStateSchema(Schema):
     current_question_description: str | None
     current_question_value_hint: str | None
     current_question_allow_manual_answer: bool
-    current_question_select_list: Dict[str, str] | None
+    current_question_select_list: List[ValueLabel[str]] | None
     questions: List[str]
     answers: List[str]

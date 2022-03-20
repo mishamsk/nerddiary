@@ -181,7 +181,7 @@ class PollWorkflow:
         if not value:
             return AddAnswerResult.ERROR
 
-        if question.delay_on and question._type.get_serializable_value(value) in question.delay_on:
+        if question.delay_on and question._type.serialize_value(value) in question.delay_on:
             self._delayed_at = datetime.datetime.now()
             return AddAnswerResult.DELAY
 
@@ -190,36 +190,6 @@ class PollWorkflow:
             return AddAnswerResult.ADDED
         else:
             return AddAnswerResult.COMPLETED
-
-    def get_select_raw(self) -> List[ValueLabel] | None:
-
-        cur_question = self._poll.questions[self._current_question_index]
-
-        depends_on = cur_question.depends_on
-
-        ret = None
-        if depends_on:
-            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
-
-            ret = cur_question._type.get_answer_options(dep_value=dep_value, user=self._user)
-        else:
-            ret = cur_question._type.get_answer_options(user=self._user)
-
-        return ret
-
-    def get_select_serialized(self) -> Dict[str, str] | None:
-        raw = self.get_select_raw()
-
-        if not raw:
-            return None
-
-        ret = {}
-        question = self._poll.questions[self._current_question_index]
-
-        for sel_val in raw:
-            ret[question._type.get_serializable_value(sel_val.value)] = sel_val.label
-
-        return ret
 
     def get_save_data(self) -> Tuple[datetime.datetime, str]:
 
@@ -232,7 +202,7 @@ class PollWorkflow:
 
             value = ""
             if q_index in self._answers_raw:
-                value = question._type.get_serializable_value(self._answers_raw[q_index])
+                value = question._type.serialize_value(self._answers_raw[q_index])
 
             ret.append(value)
 

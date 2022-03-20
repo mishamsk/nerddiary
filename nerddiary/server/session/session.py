@@ -28,6 +28,18 @@ ACTIVE_POLL_DATA_CATEGORY = "ACTIVE_POLL"
 CONFIG_DATA_CATEGORY = "CONFIG"
 
 
+async def notify(
+    self,
+    queue: asyncio.Queue,
+    type: NotificationType,
+    data: Schema | None = None,
+    exclude: Set[str] = set(),
+    source: str | None = None,
+    target: str | None = None,
+):
+    await queue.put((type, data, exclude, source, target))
+
+
 class UserSession:
     def __init__(self, session_spawner: SessionSpawner, user_id: str, user_status: UserSessionStatus) -> None:
         self._session_spawner = session_spawner
@@ -144,14 +156,15 @@ class UserSession:
                 assert workflow.current_delay_time
 
                 self._session_spawner._scheduler.add_job(
-                    func=self._session_spawner.notify(
-                        NotificationType.SERVER_POLL_DELAY_PASSED,
-                        PollWorkflowSchema(poll_run_id=poll_run_id),
-                    ),
+                    func=notify,
                     trigger=DateTrigger(
                         run_date=datetime.datetime.now(self._user_config.timezone) + workflow.current_delay_time
                     ),
-                    args=None,
+                    args=(
+                        self._session_spawner._notification_queue,
+                        NotificationType.SERVER_POLL_DELAY_PASSED,
+                        PollWorkflowSchema(poll_run_id=poll_run_id),
+                    ),
                     max_instances=1,  # type: ignore
                     coalesce=True,  # type: ignore
                     misfire_grace_time=10,  # type: ignore

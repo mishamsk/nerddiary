@@ -15,6 +15,11 @@ import pytz
 from pydantic import ValidationError
 
 
+class Mockuser:
+    def __init__(self) -> None:
+        self.timezone = pytz.timezone("US/Eastern")
+
+
 class TestQuestionType:
     def test_abstract(self):
         with pytest.raises(TypeError, match=r"Can't instantiate abstract class.*"):
@@ -57,7 +62,7 @@ class TestSelectType:
 
         assert select.get_answer_options() == [vl1, vl2]
 
-        assert select.get_serializable_value(vl1) == "No"
+        assert select.serialize_value(vl1) == "No"
 
         assert select.check_dependency_type(SelectType.parse_raw(json)) is False
 
@@ -173,7 +178,7 @@ class TestDependantSelectType:
 
         assert select.get_answer_options(ValueLabel(label="label", value="No")) == [vl_no_1, vl_no_2]
 
-        assert select.get_serializable_value(vl_no_1) == "NoNo"
+        assert select.serialize_value(vl_no_1) == "NoNo"
 
         assert select.check_dependency_type(wrong_dependency_1) is False
         assert select.check_dependency_type(wrong_dependency_2) is False
@@ -232,7 +237,7 @@ class TestDependantSelectType:
 
 
 class TestTimestampType:
-    def test_correct_function(self, mockuser):
+    def test_correct_function(self):
 
         time = TimestampType()
 
@@ -253,6 +258,8 @@ class TestTimestampType:
             time.get_answer_options()
         assert err.type == NotImplementedError
 
+        mockuser = Mockuser()
+
         tz = mockuser.timezone
 
         now_unaware = datetime.now().replace(microsecond=0)
@@ -260,7 +267,7 @@ class TestTimestampType:
         assert time.get_auto_value().value.replace(microsecond=0) == now_unaware
         assert time.get_auto_value(user=mockuser).value.replace(microsecond=0) == now_aware  # type:ignore
 
-        assert time.get_serializable_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
+        assert time.serialize_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
 
         assert time.check_dependency_type(TimestampType()) is False
 
@@ -276,11 +283,7 @@ class TestRelativeTimestampType:
         assert time.get_possible_values() == datetime
 
         # Checking value conversion
-        class Mock:
-            def __init__(self) -> None:
-                self.timezone = pytz.timezone("US/Eastern")
-
-        mockuser = Mock()
+        mockuser = Mockuser()
 
         tz = mockuser.timezone
 
@@ -331,12 +334,10 @@ class TestRelativeTimestampType:
         )
 
         # Other methods
-        assert time.get_answer_options() is None
-
         with pytest.raises(NotImplementedError) as err:
             time.get_auto_value()
         assert err.type == NotImplementedError
 
-        assert time.get_serializable_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
+        assert time.serialize_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
 
         assert time.check_dependency_type(TimestampType()) is False

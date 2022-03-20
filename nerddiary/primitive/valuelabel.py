@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, root_validator, validator
+from pydantic import root_validator
+from pydantic.generics import GenericModel
 
-from typing import Any, Dict
+from typing import Any, Dict, Generic, TypeVar
+
+ValueType = TypeVar("ValueType")
 
 
-class ValueLabel(BaseModel):
+class ValueLabel(GenericModel, Generic[ValueType]):
     label: str
-    value: Any = None
+    value: ValueType
 
     @root_validator(pre=True)
     def check_and_convert_value_label_dict(cls, values: Dict[Any, Any]):
@@ -25,17 +28,6 @@ class ValueLabel(BaseModel):
             values = {"value": val, "label": lab}
 
         return values
-
-    @validator(
-        "value",
-        always=True,
-    )
-    def set_value_to_label_if_empty(
-        cls,
-        v: str,
-        values: Dict[str, Any],
-    ):
-        return v if v is not None else values.get("label")
 
     class Config:
         frozen = True

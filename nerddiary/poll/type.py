@@ -83,12 +83,16 @@ class QuestionType(BaseModel, abc.ABC):
             raise NotImplementedError("This type doesn't auto generate a value")
 
     @abc.abstractmethod
-    def get_serializable_value(self, value: ValueLabel) -> str:
+    def serialize_value(self, value: ValueLabel) -> str:
         pass  # pragma: no cover
+
+    @abc.abstractmethod
+    def deserialize_value(self, serialized: str) -> ValueLabel:
+        pass
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> t.List[ValueLabel] | None:
+    ) -> t.List[ValueLabel[str]] | None:
         if self.is_auto:
             raise NotImplementedError("This type doesn't support user input")
 
@@ -99,7 +103,7 @@ class QuestionType(BaseModel, abc.ABC):
 
 class SelectType(QuestionType):
 
-    select: t.List[ValueLabel] = Field(description="List of answer options", min_items=1)  # type:ignore
+    select: t.List[ValueLabel[str]] = Field(description="List of answer options", min_items=1)  # type:ignore
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -119,18 +123,21 @@ class SelectType(QuestionType):
 
         return candidates[0]
 
-    def get_serializable_value(self, value: ValueLabel) -> str:
+    def serialize_value(self, value: ValueLabel) -> str:
         return str(value.value)
+
+    def deserialize_value(self, serialized: str) -> ValueLabel[str]:
+        return ValueLabel[str](value=serialized, label=serialized)
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> t.List[ValueLabel] | None:
+    ) -> t.List[ValueLabel[str]] | None:
         return self.select
 
 
 class DependantSelectType(QuestionType):
 
-    select: t.Dict[str, conlist(ValueLabel, min_items=1)]  # type:ignore
+    select: t.Dict[str, conlist(ValueLabel[str], min_items=1)]  # type:ignore
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -173,12 +180,15 @@ class DependantSelectType(QuestionType):
 
         return candidates[0]
 
-    def get_serializable_value(self, value: ValueLabel) -> str:
+    def serialize_value(self, value: ValueLabel) -> str:
         return str(value.value)
+
+    def deserialize_value(self, serialized: str) -> ValueLabel[str]:
+        return ValueLabel[str](value=serialized, label=serialized)
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> t.List[ValueLabel] | None:
+    ) -> t.List[ValueLabel[str]] | None:
         if not dep_value:
             raise AttributeError(
                 "<get_answer_options> called without a dependent value for a question with dependent select list"
@@ -222,20 +232,27 @@ class TimestampType(QuestionType):
     def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
         return datetime.datetime
 
-    def get_auto_value(self, dep_value: ValueLabel | None = None, user: User | None = None) -> ValueLabel | None:
+    def get_auto_value(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[datetime.datetime] | None:
         if user is not None:
             now = datetime.datetime.now(user.timezone)
         else:
             now = datetime.datetime.now()
 
-        return ValueLabel(
+        return ValueLabel[datetime.datetime](
             value=now,
             label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
         )
 
-    def get_serializable_value(self, value: ValueLabel) -> str:
-        assert isinstance(value.value, datetime.datetime)
+    def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
         return value.value.isoformat()
+
+    def deserialize_value(self, serialized: str) -> ValueLabel[datetime.datetime]:
+        return ValueLabel[datetime.datetime](
+            value=datetime.datetime.fromisoformat(serialized),
+            label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),
+        )
 
 
 class RelativeTimestampType(QuestionType):
@@ -297,7 +314,7 @@ class RelativeTimestampType(QuestionType):
 
     def get_value_from_answer(
         self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> ValueLabel | None:
+    ) -> ValueLabel[datetime.datetime] | None:
 
         delta = RelativeTimestampType._parse_duration(answer)
 
@@ -306,16 +323,22 @@ class RelativeTimestampType(QuestionType):
         else:
             now = datetime.datetime.now() - delta
 
-        return ValueLabel(
+        return ValueLabel[datetime.datetime](
             value=now,
             label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
         )
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> t.List[ValueLabel] | None:
-        return None
+    ) -> t.List[ValueLabel[str]] | None:
+        # TODO: make translatable
+        return [ValueLabel[str](value="0", label="Только что"), ValueLabel[str](value="1", label="Час назад")]
 
-    def get_serializable_value(self, value: ValueLabel) -> str:
-        assert isinstance(value.value, datetime.datetime)
+    def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
         return value.value.isoformat()
+
+    def deserialize_value(self, serialized: str) -> ValueLabel[datetime.datetime]:
+        return ValueLabel[datetime.datetime](
+            value=datetime.datetime.fromisoformat(serialized),
+            label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),
+        )
