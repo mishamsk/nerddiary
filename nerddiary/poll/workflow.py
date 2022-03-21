@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import csv
 import datetime
 import enum
-import itertools
+import json
 from copy import deepcopy
-from io import StringIO
 from uuid import UUID, uuid4
+
+from nerddiary.server.schema import PollWorkflowStateSchema
 
 from pydantic import ValidationError
 
@@ -30,22 +30,22 @@ class PollWorkflow:
         self,
         poll: Poll,
         user: User,
-        poll_run_id: UUID | None = uuid4(),
+        poll_run_id: UUID | str = uuid4(),
         log_id: int | None = None,
-        answers_raw: Dict[int, ValueLabel] = {},
-        current_question_index: int = 0,
+        answers_raw: Dict[str, ValueLabel] = {},
+        current_question_code: str | None = None,
         poll_ts: datetime.datetime | None = None,
         delayed_at: datetime.datetime | None = None,
     ) -> None:
 
-        self._poll_run_id = poll_run_id
+        self._poll_run_id = poll_run_id if isinstance(poll_run_id, UUID) else UUID(poll_run_id)
         self._log_id: int | None = log_id
 
         # deepcopy poll to prevent config reloads impacting ongoing polls
         self._poll = deepcopy(poll)
-        self._answers_raw: Dict[int, ValueLabel] = answers_raw
+        self._answers_raw: Dict[str, ValueLabel] = answers_raw
         self._user = user
-        self._current_question_index: int = current_question_index
+        self._current_question_code: str = current_question_code or self._poll.questions[0].code
 
         if poll_ts is None:
             user_timezone = user.timezone
@@ -85,32 +85,40 @@ class PollWorkflow:
 
     @property
     def completed(self) -> bool:
-        return self._current_question_index == len(self._poll.questions)
+        return self._current_question_code == self._poll.questions[-1].code
 
     @property
     def delayed(self) -> bool:
-        return self._delayed_at is not None
+        return self.delayed_until is not None
 
     @property
-    def delayed_for(self) -> str:
-        return str(self.current_question.delay_time) if self.delayed else ""
+    def delayed_until(self) -> datetime.datetime | None:
+        if self._delayed_at is not None:
+            assert self.current_delay_time
+            return self._delayed_at + self.current_delay_time
+
+        return None
+
+    @property
+    def delayed_for(self) -> datetime.timedelta | None:
+        return self.current_question.delay_time if self.delayed else None
 
     @property
     def current_question(self) -> Question:
-        return self._poll.questions[self._current_question_index]
+        return self._poll._questions_dict[self._current_question_code]
 
     @property
-    def current_question_index(self) -> int:
-        return self._current_question_index
+    def current_question_code(self) -> str:
+        return self._current_question_code
 
     @property
     def current_question_select_list(self) -> List[ValueLabel] | None:
-        question = self._poll.questions[self._current_question_index]
+        question = self._poll._questions_dict[self._current_question_code]
 
         depends_on = question.depends_on
 
         if depends_on:
-            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
             return question._type.get_answer_options(dep_value=dep_value, user=self._user)
         else:
             return question._type.get_answer_options(user=self._user)
@@ -121,21 +129,21 @@ class PollWorkflow:
 
     @property
     def answers(self) -> List[ValueLabel]:
-        return [val for q_index, val in self._answers_raw.items() if not self._poll.questions[q_index].ephemeral]
+        return [val for q_code, val in self._answers_raw.items() if not self._poll._questions_dict[q_code].ephemeral]
 
     @property
     def current_delay_time(self) -> datetime.timedelta | None:
-        return self._poll.questions[self._current_question_index].delay_time
+        return self._poll._questions_dict[self._current_question_code].delay_time
 
-    def _add_answer(self, val: ValueLabel, question_index: int):
-        self._answers_raw[question_index] = val
+    def _add_answer(self, val: ValueLabel, question_code: str):
+        self._answers_raw[question_code] = val
 
     def _next_question(self) -> bool:
         if self.completed:
             return False
 
-        self._current_question_index += 1
-        new_question = self._poll.questions[self._current_question_index]
+        self._current_question_code = self._get_next_question(self._current_question_code).code
+        new_question = self._poll._questions_dict[self._current_question_code]
 
         if new_question._type.is_auto:
             # If auto question - store value and recursively proceed to the next
@@ -144,36 +152,38 @@ class PollWorkflow:
 
         return True
 
+    def _get_next_question(self, current_question_code: str) -> Question:
+        return self._poll.questions[self._poll._questions_dict[current_question_code]._order + 1]
+
     def _process_auto_question(self) -> None:
-        question = self._poll.questions[self._current_question_index]
+        question = self._poll._questions_dict[self._current_question_code]
 
         depends_on = question.depends_on
 
         if depends_on:
-            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
             value = question._type.get_auto_value(dep_value=dep_value, user=self._user)
         else:
             value = question._type.get_auto_value(user=self._user)
 
         assert value is not None
 
-        self._add_answer(value, self._current_question_index)
+        self._add_answer(value, self._current_question_code)
 
     def add_answer(self, answer: str) -> AddAnswerResult:
 
-        if self._delayed_at is not None:
-            assert self.current_delay_time
-            if datetime.datetime.now() - self._delayed_at < self.current_delay_time:
+        if self.delayed_until is not None:
+            if datetime.datetime.now() < self.delayed_until:
                 return AddAnswerResult.DELAY
             else:
                 self._delayed_at = None
 
-        question = self._poll.questions[self._current_question_index]
+        question = self._poll._questions_dict[self._current_question_code]
         value = None
         depends_on = question.depends_on
 
         if depends_on:
-            dep_value = self._answers_raw[self._poll._questions_dict[depends_on]._order]
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
             value = question._type.get_value_from_answer(answer=answer, dep_value=dep_value, user=self._user)
         else:
             value = question._type.get_value_from_answer(answer=answer, user=self._user)
@@ -185,7 +195,7 @@ class PollWorkflow:
             self._delayed_at = datetime.datetime.now()
             return AddAnswerResult.DELAY
 
-        self._add_answer(value, self._current_question_index)
+        self._add_answer(value, self._current_question_code)
         if self._next_question():
             return AddAnswerResult.ADDED
         else:
@@ -193,24 +203,18 @@ class PollWorkflow:
 
     def get_save_data(self) -> Tuple[datetime.datetime, str]:
 
-        ret = []
-        ret.append(self._poll_ts.isoformat())
+        ret = {}
 
-        for q_index, question in zip(itertools.count(), self._poll.questions):
+        for q_code, question in self._poll._questions_dict.items():
             if question.ephemeral:
                 continue
 
-            value = ""
-            if q_index in self._answers_raw:
-                value = question._type.serialize_value(self._answers_raw[q_index])
+            if q_code in self._answers_raw:
+                value = question._type.serialize_value(self._answers_raw[q_code])
 
-            ret.append(value)
+                ret[q_code] = value
 
-        csv_str = StringIO()
-        writer = csv.writer(csv_str, dialect="excel", quoting=csv.QUOTE_ALL)
-        writer.writerow(ret)
-
-        return (self._poll_ts, csv_str.getvalue())
+        return (self._poll_ts, json.dumps(ret))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -218,33 +222,53 @@ class PollWorkflow:
             "user": self._user.dict(exclude_unset=True),
             "poll_run_id": self._poll_run_id.int,
             "log_id": self._log_id,
-            "answers_raw": {i: v.dict() for i, v in self._answers_raw.items()},
-            "current_question_index": self._current_question_index,
+            "answers_raw": {q_code: answer.dict() for q_code, answer in self._answers_raw.items()},
+            "current_question_code": self._current_question_code,
             "poll_ts": self._poll_ts.isoformat(),
             "delayed_at": self._delayed_at.isoformat() if self._delayed_at else "",
         }
 
+    def to_schema(self) -> PollWorkflowStateSchema:
+        return PollWorkflowStateSchema(
+            user_id=self._user.id,
+            poll_name=self.poll_name,
+            poll_run_id=self.poll_run_id,
+            completed=self.completed,
+            delayed=self.delayed,
+            delayed_for=str(self.delayed_for) if self.delayed_for else "",
+            current_question_display_name=self.current_question.display_name,
+            current_question_code=self.current_question_code,
+            current_question_description=self.current_question.description,
+            current_question_value_hint=self.current_question._type.value_hint,
+            current_question_allow_manual_answer=self.current_question._type.allows_manual,
+            current_question_select_list=self.current_question_select_list,
+            questions=[q.display_name for q in self.questions if q.ephemeral is False],
+            answers=[a.label for a in self.answers],
+        )
+
     @classmethod
     def from_store_data(cls, poll: Poll, user: User, log_id: int, poll_ts: datetime.datetime, log: str) -> PollWorkflow:
-        answers_raw = {}
+        answers_raw: Dict[str, ValueLabel] = {}
 
         if log:
-            row = next(csv.reader([log], dialect="excel", quoting=csv.QUOTE_ALL))
-            for q_index, question in zip(itertools.count(), poll.questions):
+            row = json.loads(log)
+            for q_code, question in poll._questions_dict.items():
                 if question.ephemeral:
                     # Ephemeral question values are not stored, so we just skipping them. Should not be a problem
                     continue
 
-                if row[q_index] != "":
-                    depends_on = question.depends_on
+                if q_code not in row:
+                    continue
 
-                    if depends_on:
-                        dep_value = answers_raw[poll._questions_dict[depends_on]._order]
-                        answers_raw[q_index] = question._type.get_value_from_answer(
-                            answer=row[q_index], dep_value=dep_value, user=user
-                        )
-                    else:
-                        answers_raw[q_index] = question._type.get_value_from_answer(answer=row[q_index], user=user)
+                depends_on = question.depends_on
+
+                if depends_on:
+                    dep_value = answers_raw[poll._questions_dict[depends_on].code]
+                    answers_raw[q_code] = question._type.deserialize_value(
+                        serialized=row[q_code], dep_value=dep_value, user=user
+                    )
+                else:
+                    answers_raw[q_code] = question._type.deserialize_value(serialized=row[q_code], user=user)
 
         return cls(
             poll=poll,
@@ -262,7 +286,7 @@ class PollWorkflow:
             poll_run_id = UUID(int=serialized["poll_run_id"])
             log_id = serialized["log_id"]
             answers_raw = {i: ValueLabel.parse_obj(v) for i, v in serialized["answers_raw"]}
-            current_question_index = serialized["current_question_index"]
+            current_question_code = serialized["current_question_code"]
             poll_ts = datetime.datetime.fromisoformat(serialized["poll_ts"])
             delayed_at = (
                 datetime.datetime.fromisoformat(serialized["delayed_at"]) if serialized["delayed_at"] != "" else None
@@ -278,7 +302,7 @@ class PollWorkflow:
             poll_run_id=poll_run_id,
             log_id=log_id,
             answers_raw=answers_raw,
-            current_question_index=current_question_index,
+            current_question_code=current_question_code,
             poll_ts=poll_ts,
             delayed_at=delayed_at,
         )

@@ -8,15 +8,17 @@ import json
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from pydantic import ValidationError
+from pydantic.json import pydantic_encoder
 
 from ...data.data import DataConnection, DataProvider, IncorrectPasswordKeyError
 from ...error.error import NerdDiaryError, NerdDiaryErrorCode
 from ...poll.poll import Poll
 from ...poll.workflow import AddAnswerResult, PollWorkflow
 from ...user.user import User
-from ..schema import NotificationType, PollWorkflowSchema, Schema, UserSessionSchema
+from ..schema import NotificationType, PollBaseSchema, Schema, UserSessionSchema
 from .status import UserSessionStatus
 
 from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
@@ -26,18 +28,6 @@ from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
 
 ACTIVE_POLL_DATA_CATEGORY = "ACTIVE_POLL"
 CONFIG_DATA_CATEGORY = "CONFIG"
-
-
-async def notify(
-    self,
-    queue: asyncio.Queue,
-    type: NotificationType,
-    data: Schema | None = None,
-    exclude: Set[str] = set(),
-    source: str | None = None,
-    target: str | None = None,
-):
-    await queue.put((type, data, exclude, source, target))
 
 
 class UserSession:
@@ -81,7 +71,28 @@ class UserSession:
                 assert config
 
                 self._user_config = User.parse_raw(config)
-                # TODO: reload jobs
+                if self._user_config.polls:
+                    for poll in self._user_config.polls:
+                        if poll.reminder_time:
+                            self._session_spawner._scheduler.add_job(
+                                func=self._session_spawner.notify,
+                                trigger=CronTrigger(
+                                    day_of_week=",".join(map(str, tuple(range(7)))),
+                                    hour=poll.reminder_time.hour,
+                                    minute=poll.reminder_time.minute,
+                                    second=poll.reminder_time.second,
+                                    timezone=poll.reminder_time.tzinfo,
+                                ),
+                                args=(
+                                    NotificationType.SERVER_POLL_REMINDER,
+                                    PollBaseSchema(user_id=self.user_id, poll_name=poll.poll_name),
+                                ),
+                                max_instances=1,  # type: ignore
+                                coalesce=True,  # type: ignore
+                                misfire_grace_time=10,  # type: ignore
+                                name=f"{self._user_config.id}/{poll.poll_name}",
+                            )
+
                 new_status = UserSessionStatus.CONFIGURED
             except ValidationError:
                 raise NerdDiaryError(NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR, ext_message=CONFIG_DATA_CATEGORY)
@@ -95,7 +106,21 @@ class UserSession:
                 active_polls: Dict[str, Any] = json.loads(raw_data)
 
                 self._active_polls = {i: PollWorkflow.from_dict(v) for i, v in active_polls.items()}
-                # TODO: reload jobs
+
+                for active_poll in self._active_polls.values():
+                    if active_poll.delayed_until:
+                        self._session_spawner._scheduler.add_job(
+                            func=self._session_spawner.notify,
+                            trigger=DateTrigger(run_date=active_poll.delayed_until),
+                            args=(
+                                NotificationType.SERVER_POLL_DELAY_PASSED,
+                                active_poll.to_schema(),
+                            ),
+                            max_instances=1,  # type: ignore
+                            coalesce=True,  # type: ignore
+                            misfire_grace_time=10,  # type: ignore
+                            name=f"{active_poll.poll_run_id}/{active_poll.current_question_code}",
+                        )
             except ValidationError:
                 raise NerdDiaryError(NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR, ext_message=ACTIVE_POLL_DATA_CATEGORY)
 
@@ -126,7 +151,7 @@ class UserSession:
         if poll.once_per_day:
             for active_poll in self._active_polls.values():
                 if active_poll.poll_name == poll_name:
-                    return active_poll
+                    raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_ALREADY_ACTIVE, poll_name)
 
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
@@ -153,22 +178,19 @@ class UserSession:
         res = workflow.add_answer(answer=answer)
         match res:
             case AddAnswerResult.DELAY:
-                assert workflow.current_delay_time
+                assert workflow.delayed_until
 
                 self._session_spawner._scheduler.add_job(
-                    func=notify,
-                    trigger=DateTrigger(
-                        run_date=datetime.datetime.now(self._user_config.timezone) + workflow.current_delay_time
-                    ),
+                    func=self._session_spawner.notify,
+                    trigger=DateTrigger(run_date=workflow.delayed_until),
                     args=(
-                        self._session_spawner._notification_queue,
                         NotificationType.SERVER_POLL_DELAY_PASSED,
-                        PollWorkflowSchema(poll_run_id=poll_run_id),
+                        workflow.to_schema(),
                     ),
                     max_instances=1,  # type: ignore
                     coalesce=True,  # type: ignore
                     misfire_grace_time=10,  # type: ignore
-                    name=f"{poll_run_id}/{workflow.current_question_index}",
+                    name=f"{poll_run_id}/{workflow.current_question_code}",
                 )
             case AddAnswerResult.COMPLETED:
                 pass
@@ -189,6 +211,41 @@ class UserSession:
                 self._data_connection.update_log(workflow.log_id, *workflow.get_save_data())
             else:
                 self._data_connection.append_log(workflow.poll_name, *workflow.get_save_data())
+
+    async def restart_poll(self, poll_run_id: str):
+        workflow = self._active_polls.get(poll_run_id)
+        if workflow is None:
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
+
+        self._active_polls[poll_run_id] = PollWorkflow(
+            poll=workflow._poll, user=workflow._user, poll_run_id=poll_run_id
+        )
+
+    async def get_all_poll_data(self) -> List[Dict[str, Any]] | None:
+        if self.user_status < UserSessionStatus.CONFIGURED:
+            return None
+
+        ret = []
+        all_logs = self._data_connection.get_all_logs()
+        for id, poll_name, poll_ts, data in all_logs:
+            d = {}
+            d["id"] = id
+            d["poll_name"] = poll_name
+            d["poll_ts"] = poll_ts
+            d["data"] = json.loads(data)
+            ret.append(d)
+
+        return ret
+
+    async def close_all_polls(self, save: bool):
+        for workflow in self._active_polls.values():
+            if save:
+                if workflow.log_id is not None:
+                    self._data_connection.update_log(workflow.log_id, *workflow.get_save_data())
+                else:
+                    self._data_connection.append_log(workflow.poll_name, *workflow.get_save_data())
+
+        self._active_polls.clear()
 
     async def set_config(self, config: str):
         if not self.user_status >= UserSessionStatus.UNLOCKED:
@@ -225,7 +282,7 @@ class UserSession:
                 )
             if self._active_polls:
                 self._data_connection.store_user_data(
-                    json.dumps({i: v.to_dict() for i, v in self._active_polls.items()}),
+                    json.dumps({i: v.to_dict() for i, v in self._active_polls.items()}, default=pydantic_encoder),
                     category=ACTIVE_POLL_DATA_CATEGORY,
                 )
 

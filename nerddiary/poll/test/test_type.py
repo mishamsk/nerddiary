@@ -154,7 +154,7 @@ class TestDependantSelectType:
 
         # Wrong dep value type
         with pytest.raises(AttributeError) as err:
-            select.get_value_from_answer("Other value", ValueLabel(label="label", value=1))
+            select.get_value_from_answer("Other value", ValueLabel(label="label", value=1))  # type: ignore
         assert err.type == AttributeError
 
         # Correct dep value, wrong answer value

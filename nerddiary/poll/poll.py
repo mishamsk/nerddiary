@@ -66,6 +66,15 @@ class Poll(BaseModel):
             self._questions_dict |= {q.code: q}
 
     @validator("questions")
+    def question_codes_must_be_unique(cls, v: List[Question]):
+        if v:
+            q_codes = [q.code for q in v]
+            q_codes_set = set(q_codes)
+            if len(q_codes_set) != len(q_codes):
+                raise ValueError("Question codes must be unique")
+        return v
+
+    @validator("questions")
     def dependant_question_must_exist_and_support_type(cls, v: List[Question]):
         # Check that dependant question exists and has already been processed (comes earlier)
         previous = []

@@ -28,7 +28,6 @@ class NerdDiaryServerConfig(BaseSettings):
     """ Data provider to use to srote poll answers """
 
     data_provider_params: Dict[str, Any] | None = {"base_path": "data"}
-    jobstore_sa_url: str = "sqlite:///data/jobstore.db"
 
     poll_timeout: Optional[datetime.timedelta] = Field(
         default=datetime.timedelta(hours=24),

@@ -200,7 +200,7 @@ class DataConnection(ABC):
         """Updates a log identified by `id` with a new serialized `log`"""
         raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
-    def get_all_logs(self) -> List[Tuple[int, datetime.datetime, str]]:
+    def get_all_logs(self) -> List[Tuple[int, str, datetime.datetime, str]]:
         """Get all serialized logs"""
         raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
 
@@ -452,9 +452,9 @@ class SQLLiteConnection(DataConnection):
             for row in rows:
                 ret.append(
                     (
-                        row.id,
-                        row.poll_ts,
-                        self._encryption_provider.decrypt(row.log).decode(),
+                        row["id"],
+                        row["poll_ts"],
+                        self._encryption_provider.decrypt(row["log"]).decode(),
                     )
                 )
 
@@ -486,10 +486,25 @@ class SQLLiteConnection(DataConnection):
             else:
                 return False
 
-    def get_all_logs(self) -> List[Tuple[int, datetime.datetime, str]]:
+    def get_all_logs(self) -> List[Tuple[int, str, datetime.datetime, str]]:
         stmt = self._poll_log_table.select()
 
-        return self._query_and_decrypt(stmt)
+        ret = []
+        with self._engine.connect() as conn:
+            result = conn.execute(stmt)
+
+            rows = result.all()
+            for row in rows:
+                ret.append(
+                    (
+                        row["id"],
+                        row["poll_code"],
+                        row["poll_ts"],
+                        self._encryption_provider.decrypt(row["log"]).decode(),
+                    )
+                )
+
+        return ret
 
     def get_poll_logs(
         self,

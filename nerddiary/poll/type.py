@@ -87,7 +87,9 @@ class QuestionType(BaseModel, abc.ABC):
         pass  # pragma: no cover
 
     @abc.abstractmethod
-    def deserialize_value(self, serialized: str) -> ValueLabel:
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel:
         pass
 
     def get_answer_options(
@@ -126,7 +128,9 @@ class SelectType(QuestionType):
     def serialize_value(self, value: ValueLabel) -> str:
         return str(value.value)
 
-    def deserialize_value(self, serialized: str) -> ValueLabel[str]:
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[str]:
         return ValueLabel[str](value=serialized, label=serialized)
 
     def get_answer_options(
@@ -159,7 +163,7 @@ class DependantSelectType(QuestionType):
         return ret
 
     def get_value_from_answer(
-        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
+        self, answer: str, dep_value: ValueLabel[str] | None = None, user: User | None = None
     ) -> ValueLabel | None:
         if not dep_value:
             raise AttributeError(
@@ -183,8 +187,27 @@ class DependantSelectType(QuestionType):
     def serialize_value(self, value: ValueLabel) -> str:
         return str(value.value)
 
-    def deserialize_value(self, serialized: str) -> ValueLabel[str]:
-        return ValueLabel[str](value=serialized, label=serialized)
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel[str] | None = None, user: User | None = None
+    ) -> ValueLabel[str]:
+        if not dep_value:
+            raise AttributeError(
+                "<deserialize_value> called without a dependent value for a question with dependent select list"
+            )
+        if not isinstance(dep_value.value, str):
+            raise AttributeError(
+                f"<deserialize_value> called with incorrect dependency value. Got {dep_value.value}, expected a string"
+            )
+        if dep_value.value not in self.select:
+            raise AttributeError(
+                f"<deserialize_value> called with incorrect dependency value. Got {dep_value}, but it doesn't exist among this type's select"
+            )
+
+        candidates = [vl for vl in self.select[dep_value.value] if vl.value == serialized]
+        if not candidates:
+            raise UnsupportedAnswerError()
+
+        return candidates[0]
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
@@ -248,7 +271,9 @@ class TimestampType(QuestionType):
     def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
         return value.value.isoformat()
 
-    def deserialize_value(self, serialized: str) -> ValueLabel[datetime.datetime]:
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[datetime.datetime]:
         return ValueLabel[datetime.datetime](
             value=datetime.datetime.fromisoformat(serialized),
             label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),
@@ -328,6 +353,11 @@ class RelativeTimestampType(QuestionType):
             label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
         )
 
+    @property
+    def allows_manual(self) -> bool:
+        """Returns True if question type allows arbitrary manual value as input"""
+        return True
+
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> t.List[ValueLabel[str]] | None:
@@ -337,7 +367,9 @@ class RelativeTimestampType(QuestionType):
     def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
         return value.value.isoformat()
 
-    def deserialize_value(self, serialized: str) -> ValueLabel[datetime.datetime]:
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[datetime.datetime]:
         return ValueLabel[datetime.datetime](
             value=datetime.datetime.fromisoformat(serialized),
             label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),

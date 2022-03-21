@@ -48,7 +48,7 @@ class NerdDiaryClient(AsyncApplication):
         self._sessions: t.Dict[str, UserSessionSchema] = {}
         self._notification_handlers: t.DefaultDict[
             NotificationType,
-            t.List[t.Callable[[NotificationType, t.Dict[str, t.Any] | None], t.Coroutine[t.Any, t.Any, None]]],
+            t.List[t.Callable[[NotificationType, Schema | None], t.Coroutine[t.Any, t.Any, None]]],
         ] = defaultdict(list)
         self._notification_handler_tasks: t.Set[asyncio.Task] = set()
 
@@ -281,28 +281,34 @@ class NerdDiaryClient(AsyncApplication):
         self._running = False
 
     async def _process_notification(self, n_type: NotificationType, raw_data: t.Dict[str, t.Any] | None = None):
+        data = None
+        if raw_data:
+            data = self._parse_server_data(data=raw_data, context=f"Notification: {n_type.name}")
+
         # If this is a session update from the server, we need to store it and optionally unlock
         if n_type == NotificationType.SERVER_SESSION_UPDATE:
-            try:
-                ses = UserSessionSchema.parse_obj(raw_data)
-                user_id = ses.user_id
+            if not isinstance(data, UserSessionSchema):
+                self._logger.exception("Received incorrect session data from the server")
+            else:
+                user_id = data.user_id
 
                 local_ses = self._sessions.get(user_id)
                 if local_ses:
                     self._logger.debug("Found an existing session on client")
-                    if ses.user_status == UserSessionStatus.LOCKED and local_ses.user_status > UserSessionStatus.LOCKED:
+                    if (
+                        data.user_status == UserSessionStatus.LOCKED
+                        and local_ses.user_status > UserSessionStatus.LOCKED
+                    ):
                         self._logger.debug("Client has unlocked session, while server is not - unlocking")
                         await self._run_rpc("unlock_session", params={"user_id": user_id, "key": local_ses.key})
                     else:
-                        self._sessions[user_id] = ses
+                        self._sessions[user_id] = data
                 else:
-                    self._sessions[user_id] = ses
-            except ValidationError:
-                self._logger.exception("Received incorrect session data from the server")
+                    self._sessions[user_id] = data
 
         for handler in self._notification_handlers[n_type]:
             try:
-                await handler(n_type, raw_data)
+                await handler(n_type, data)
             except StopNotificationPropagation:
                 pass
             except Exception:
@@ -339,28 +345,7 @@ class NerdDiaryClient(AsyncApplication):
             if isinstance(res, bool):
                 return res
 
-            if "schema" not in res or "data" not in res:
-                err = f"Incorrect implementation of {method} on the server"
-                self._logger.error(err)
-                return None
-
-            schema_cls = None
-            for cls in Schema.__subclasses__():
-                if cls.__name__ == res["schema"]:
-                    schema_cls = cls
-                    break
-
-            if schema_cls is None:
-                err = f"Schema class {res['schema']} returned by remote {method=} doesn't exist"
-                self._logger.error(err)
-                return None
-
-            try:
-                return schema_cls.parse_obj(res["data"])
-            except ValidationError:
-                err = f"Incorrect data returned by remote {method=}"
-                self._logger.exception(err)
-                return None
+            return self._parse_server_data(data=res, context=f"RPC method {method}")
 
         except NerdDiaryError as r_err:
             if r_err.code > NerdDiaryErrorCode.RPC_SERVER_ERROR:
@@ -371,5 +356,32 @@ class NerdDiaryClient(AsyncApplication):
                 return None
         except Exception:
             err = f"Unexpected exception during execution of remote {method=}"
+            self._logger.exception(err)
+            return None
+
+    def _parse_server_data(self, data: t.Dict[str, t.Any], context: str = "") -> Schema | None:
+        def __all_subclasses(cls):
+            return set(cls.__subclasses__()).union([s for c in cls.__subclasses__() for s in __all_subclasses(c)])
+
+        if "schema" not in data or "data" not in data:
+            err = f"Incorrect data from the server: 'schema' or 'data' keys are missing. {context=}"
+            self._logger.error(err)
+            return None
+
+        schema_cls = None
+        for cls in __all_subclasses(Schema):
+            if cls.__name__ == data["schema"]:
+                schema_cls = cls
+                break
+
+        if schema_cls is None:
+            err = f"Schema class {data['schema']} doesn't exist. Returned by remote {context=}"
+            self._logger.error(err)
+            return None
+
+        try:
+            return schema_cls.parse_obj(data["data"])
+        except ValidationError:
+            err = f"Incorrect data (can't parse schema). Returned by remote {context=}"
             self._logger.exception(err)
             return None

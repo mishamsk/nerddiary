@@ -24,7 +24,9 @@ class Question(BaseModel):
     """Question type name or an inline unnamed type (must be either a SelectType or DependantSelectType)
     """
 
-    code: str = Field(description="Question mandatory short code name. Use it in depends_on")
+    code: str = Field(
+        description="Question mandatory short code name. Use it in depends_on", max_length=16, regex=r"^[\da-z_]{1,16}$"
+    )
     """Question mandatory short code name. Use it in depends_on
     """
 

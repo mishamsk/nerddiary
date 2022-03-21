@@ -5,7 +5,6 @@ import json
 import logging
 from contextlib import suppress
 
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi.websockets import WebSocket
 from jsonrpcserver import async_dispatch
@@ -35,7 +34,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
 
         self._data_provider = DataProvider.get_data_provider(config.data_provider_name, config.data_provider_params)
 
-        self._scheduler = AsyncIOScheduler(jobstores={"default": SQLAlchemyJobStore(url=config.jobstore_sa_url)})
+        self._scheduler = AsyncIOScheduler()
 
         self._notification_queue: asyncio.Queue[
             Tuple[NotificationType, Schema | None, Set[str], str | None, str | None]
@@ -182,6 +181,8 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         await self.notify(
             NotificationType.SERVER_CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id
         )
+        if len(self._actve_connections) == 0:
+            await self._sessions.close()
 
     async def on_connect_client(self, client_id: str, websocket: WebSocket):
         await websocket.accept()
