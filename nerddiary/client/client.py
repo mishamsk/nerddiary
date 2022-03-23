@@ -78,33 +78,35 @@ class NerdDiaryClient(AsyncApplication):
             raise RuntimeError("Couldn't connect to NerdDiary Server")
 
     async def _aclose(self) -> bool:
-        with suppress(asyncio.CancelledError):
-            self._logger.debug("Closing NerdDiary client")
-            if self._running:
-                # Stop any internal loops
-                self._stop()
 
-            # If rpc dispatcher exist, wait for it to stop
-            if self._message_dispatcher and self._message_dispatcher.cancel():
-                self._logger.debug("Waiting for message dispatcher to gracefully finish")
-                await self._message_dispatcher
+        self._logger.debug("Closing NerdDiary client")
+        if self._running:
+            # Stop any internal loops
+            self._stop()
 
-            # Cancel pending rpc_calls
-            self._logger.debug(f"Cancelling pending RPC calls (result awaits). Total count: {len(self._rpc_calls)}")
-            for id, pending_call in self._rpc_calls.items():
-                pending_call._fut.cancel()
-                self._rpc_calls.pop(id)
+        # If rpc dispatcher exist, wait for it to stop
+        if self._message_dispatcher and not self._message_dispatcher.done() and self._message_dispatcher.cancel():
+            self._logger.debug("Waiting for message dispatcher to gracefully finish")
+            await self._message_dispatcher
 
-            # Cancel all notification handler tasks
-            for task in self._notification_handler_tasks:
-                if not task.done() and task.cancel():
-                    self._logger.debug(f"Waiting for {task!r} to gracefully finish")
+        # Cancel pending rpc_calls
+        self._logger.debug(f"Cancelling pending RPC calls (result awaits). Total count: {len(self._rpc_calls)}")
+        for id, pending_call in self._rpc_calls.items():
+            pending_call._fut.cancel()
+            self._rpc_calls.pop(id)
+
+        # Cancel all notification handler tasks
+        for task in self._notification_handler_tasks:
+            if not task.done() and task.cancel():
+                self._logger.debug(f"Waiting for {task!r} to gracefully finish")
+                with suppress(asyncio.CancelledError):
                     await task
-            # Clearing handler task list
-            self._notification_handler_tasks = set()
 
-            # Disconnect websocket
-            await self._disconnect()
+        # Clearing handler task list
+        self._notification_handler_tasks = set()
+
+        # Disconnect websocket
+        await self._disconnect()
 
         return True
 
@@ -275,7 +277,9 @@ class NerdDiaryClient(AsyncApplication):
             except Exception:
                 err = "Unexpected exception during message dispatching."
                 self._logger.exception(err)
-                continue
+                break
+
+        self._logger.debug("Exiting message dispatcher")
 
     def _stop(self):
         self._running = False

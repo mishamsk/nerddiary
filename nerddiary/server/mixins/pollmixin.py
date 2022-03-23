@@ -148,7 +148,7 @@ class PollMixin:
 
         ret = {
             "schema": "PollLogsSchema",
-            "data": {"logs": data},
+            "data": data.dict(),
         }
         self._logger.debug("Success")
         return Success(ret)

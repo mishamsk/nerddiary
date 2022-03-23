@@ -225,12 +225,18 @@ class DataConnection(ABC):
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
+        skip: int | None = None,
     ) -> List[Tuple[int, datetime.datetime, str]]:
-        """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`"""
+        """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`+`skip` starting from `skip` (ordered by date DESC)"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
-    def get_last_n_logs(self, poll_code: str, count: int) -> List[Tuple[int, datetime.datetime, str]]:
-        return self.get_poll_logs(poll_code, max_rows=count)
+    def get_last_n_logs(
+        self,
+        poll_code: str,
+        count: int,
+        skip: int | None = None,
+    ) -> List[Tuple[int, datetime.datetime, str]]:
+        return self.get_poll_logs(poll_code, max_rows=count, skip=skip)
 
     def get_last_logs(
         self, poll_code: str, date_from: datetime.datetime, max_rows: int
@@ -512,7 +518,11 @@ class SQLLiteConnection(DataConnection):
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
+        skip: int | None = None,
     ) -> List[Tuple[int, datetime.datetime, str]]:
+        if not skip:
+            skip = 0
+
         stmt = self._poll_log_table.select().where(self._poll_log_table.c.poll_code == poll_code)
 
         if date_from:
@@ -522,6 +532,8 @@ class SQLLiteConnection(DataConnection):
             stmt = stmt.where(self._poll_log_table.c.poll_ts <= date_to)
 
         if max_rows:
-            stmt = stmt.limit(max_rows)
+            stmt = stmt.limit(max_rows + skip)
 
-        return self._query_and_decrypt(stmt)
+        stmt = stmt.order_by(self._poll_log_table.c.poll_ts.desc())
+
+        return self._query_and_decrypt(stmt)[skip:]

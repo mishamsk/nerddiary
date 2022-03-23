@@ -18,7 +18,7 @@ from ...error.error import NerdDiaryError, NerdDiaryErrorCode
 from ...poll.poll import Poll
 from ...poll.workflow import AddAnswerResult, PollWorkflow
 from ...user.user import User
-from ..schema import NotificationType, PollBaseSchema, Schema, UserSessionSchema
+from ..schema import NotificationType, PollBaseSchema, PollLogSchema, PollLogsSchema, Schema, UserSessionSchema
 from .status import UserSessionStatus
 
 from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
@@ -221,7 +221,23 @@ class UserSession:
             poll=workflow._poll, user=workflow._user, poll_run_id=poll_run_id
         )
 
-    async def get_all_poll_data(self) -> List[Dict[str, Any]] | None:
+    async def get_all_poll_data(self) -> PollLogsSchema:
+        if self.user_status <= UserSessionStatus.LOCKED:
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                "Requested data, but user session is either locked or not configured.",
+            )
+
+        ret = PollLogsSchema(logs=[])
+        all_logs = self._data_connection.get_all_logs()
+
+        for id, poll_name, poll_ts, data in all_logs:
+            log = PollLogSchema(id=id, poll_name=poll_name, poll_ts=poll_ts, data=json.loads(data))
+            ret.logs.append(log)
+
+        return ret
+
+    async def get_last_n_poll_logs(self) -> List[Dict[str, Any]] | None:
         if self.user_status < UserSessionStatus.CONFIGURED:
             return None
 

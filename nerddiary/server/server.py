@@ -4,10 +4,12 @@ import asyncio
 import json
 import logging
 from contextlib import suppress
+from functools import partial
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi.websockets import WebSocket
 from jsonrpcserver import async_dispatch
+from pydantic.json import pydantic_encoder
 
 from ..asynctools.asyncapp import AsyncApplication
 from ..data.data import DataProvider
@@ -70,30 +72,32 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         await self._sessions.init_sessions()
 
     async def _aclose(self) -> bool:
-        with suppress(asyncio.CancelledError):
-            self._logger.debug("Closing NerdDiary server")
-            if self._running:
-                # Stop any internal loops
-                self.stop()
 
-            # If notification dispatcher exist, wait for it to stop
-            if self._notification_dispatcher and self._notification_dispatcher.cancel():
-                self._logger.debug("Waiting for Notification dispatcher to gracefully finish")
+        self._logger.debug("Closing NerdDiary server")
+        if self._running:
+            # Stop any internal loops
+            self.stop()
+
+        # If notification dispatcher exist, wait for it to stop
+        if self._notification_dispatcher and self._notification_dispatcher.cancel():
+            self._logger.debug("Waiting for Notification dispatcher to gracefully finish")
+            with suppress(asyncio.CancelledError):
                 await self._notification_dispatcher
 
-            # Disconnect all clients
-            for client in self._actve_connections:
-                self._logger.debug(f"Disconecting {client=}")
-                await self.disconnect_client(client)
+        # Disconnect all clients
+        for client in self._actve_connections:
+            self._logger.debug(f"Disconecting {client=}")
+            await self.disconnect_client(client)
 
-            # If message dispatcher exist, wait for it to stop
-            if self._message_dispatcher and self._message_dispatcher.cancel():
-                self._logger.debug("Waiting for Websocket Message dispatcher to gracefully finish")
+        # If message dispatcher exist, wait for it to stop
+        if self._message_dispatcher and self._message_dispatcher.cancel():
+            self._logger.debug("Waiting for Websocket Message dispatcher to gracefully finish")
+            with suppress(asyncio.CancelledError):
                 await self._message_dispatcher
 
-            # Shutdown the scheduler
-            self._scheduler.shutdown(wait=False)
-            await self._sessions.close()
+        # Shutdown the scheduler
+        self._scheduler.shutdown(wait=False)
+        await self._sessions.close()
 
         return True
 
@@ -153,7 +157,9 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
                     self._logger.debug(
                         f"Processing incoming RPC call from a client {client_id=}. Method <{parsed_response['method']}>. JSON RPC id: {parsed_response['id']}"
                     )
-                    if response := await async_dispatch(raw_response, context=self):
+                    if response := await async_dispatch(
+                        raw_response, context=self, serializer=partial(json.dumps, default=pydantic_encoder)
+                    ):
                         await ws.send_text(response)
                 else:
                     # Process unrecognized message
@@ -163,6 +169,9 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
                 self._logger.error(err)
             except asyncio.CancelledError:
                 break
+            except Exception:
+                self._logger.exception("Unexpected exception in message dispatcher")
+                raise
             finally:
                 try:
                     self._message_queue.task_done()
