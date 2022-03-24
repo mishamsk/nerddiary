@@ -37,7 +37,7 @@ class Poll(BaseModel):
     """ Dictionary of polls questions for workflow convinience
     """
 
-    once_per_day: bool = Field(default=True, description="Whether this poll can only be asked once a day")
+    once_per_day: bool = Field(default=False, description="Whether this poll can only be asked once a day")
     """ Whether this poll can only be asked once a day """
 
     hours_over_midgnight: Optional[int] = Field(

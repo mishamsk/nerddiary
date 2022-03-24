@@ -212,14 +212,16 @@ class UserSession:
             else:
                 self._data_connection.append_log(workflow.poll_name, *workflow.get_save_data())
 
-    async def restart_poll(self, poll_run_id: str):
+    async def restart_poll(self, poll_run_id: str) -> PollWorkflow:
         workflow = self._active_polls.get(poll_run_id)
         if workflow is None:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
 
-        self._active_polls[poll_run_id] = PollWorkflow(
+        self._active_polls[poll_run_id] = new_workflow = PollWorkflow(
             poll=workflow._poll, user=workflow._user, poll_run_id=poll_run_id
         )
+
+        return new_workflow
 
     async def get_all_poll_data(self) -> PollLogsSchema:
         if self.user_status <= UserSessionStatus.LOCKED:

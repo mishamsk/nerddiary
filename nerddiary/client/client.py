@@ -84,6 +84,9 @@ class NerdDiaryClient(AsyncApplication):
             # Stop any internal loops
             self._stop()
 
+        # Disconnect websocket
+        await self._disconnect()
+
         # If rpc dispatcher exist, wait for it to stop
         if self._message_dispatcher and not self._message_dispatcher.done() and self._message_dispatcher.cancel():
             self._logger.debug("Waiting for message dispatcher to gracefully finish")
@@ -104,9 +107,6 @@ class NerdDiaryClient(AsyncApplication):
 
         # Clearing handler task list
         self._notification_handler_tasks = set()
-
-        # Disconnect websocket
-        await self._disconnect()
 
         return True
 

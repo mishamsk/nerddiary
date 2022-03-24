@@ -378,9 +378,9 @@ class SQLLiteConnection(DataConnection):
         stmt = self._user_data_table.select().where(self._user_data_table.c.category == category)
         new = True
         with self._engine.connect() as conn:
-            result = conn.execute(stmt)
+            row = conn.execute(stmt).first()
 
-            if result.rowcount == 1:
+            if row:
                 new = False
 
         stmt = None

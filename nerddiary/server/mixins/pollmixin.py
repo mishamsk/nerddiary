@@ -122,13 +122,17 @@ class PollMixin:
             return Error(err.code, err.message, err.data)
 
         try:
-            await ses.restart_poll(poll_run_id=poll_run_id)
+            poll_workflow = await ses.restart_poll(poll_run_id=poll_run_id)
         except NerdDiaryError as err:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
 
+        ret = {
+            "schema": "PollWorkflowStateSchema",
+            "data": poll_workflow.to_schema().dict(exclude_unset=True),
+        }
         self._logger.debug("Success")
-        return Success(True)
+        return Success(ret)
 
     @method  # type:ignore
     async def get_all_poll_data(self: ServerProtocol, user_id: str) -> Result:
