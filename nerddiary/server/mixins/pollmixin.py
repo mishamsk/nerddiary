@@ -135,7 +135,13 @@ class PollMixin:
         return Success(ret)
 
     @method  # type:ignore
-    async def get_all_poll_data(self: ServerProtocol, user_id: str) -> Result:
+    async def get_poll_data(
+        self: ServerProtocol,
+        user_id: str,
+        poll_name: str | None = None,
+        count: int | None = None,
+        skip: int | None = None,
+    ) -> Result:
         self._logger.debug("Processing RPC call")
 
         try:
@@ -145,7 +151,7 @@ class PollMixin:
             return Error(err.code, err.message, err.data)
 
         try:
-            data = await ses.get_all_poll_data()
+            data = await ses.get_poll_data(poll_name=poll_name, count=count, skip=skip)
         except NerdDiaryError as err:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)

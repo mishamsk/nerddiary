@@ -1,4 +1,5 @@
 import enum
+import sys
 
 from typing import Any
 
@@ -61,4 +62,4 @@ class NerdDiaryError(Exception):
         else:
             self.message = mes
 
-        super().__init__(code, self.message, data)
+        super().__init__(code, self.message, data, sys.exc_info())

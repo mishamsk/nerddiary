@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from nerddiary.poll.question import Question
-from nerddiary.poll.type import DependantSelectType, TimestampType
+from nerddiary.poll.type import AuroTimestampType, DependantSelectType
 from nerddiary.primitive.valuelabel import ValueLabel
 
 import pytest
@@ -65,7 +65,7 @@ class TestQuestion:
 
         q = Question.parse_raw(json)
 
-        assert isinstance(q._type, TimestampType)
+        assert isinstance(q._type, AuroTimestampType)
         assert q.code == "q"
         assert q.display_name == "not code"
         assert q.description is None

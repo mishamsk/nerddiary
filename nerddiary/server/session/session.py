@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import json
 import logging
+from uuid import UUID
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -37,7 +38,7 @@ class UserSession:
         self._user_status = user_status
         self._user_config: User | None = None
         self._data_connection: DataConnection | None = None
-        self._active_polls: Dict[str, PollWorkflow] = {}
+        self._active_polls: Dict[UUID, PollWorkflow] = {}
 
     @property
     def user_id(self) -> str:
@@ -105,7 +106,7 @@ class UserSession:
                 assert raw_data
                 active_polls: Dict[str, Any] = json.loads(raw_data)
 
-                self._active_polls = {i: PollWorkflow.from_dict(v) for i, v in active_polls.items()}
+                self._active_polls = {UUID(i): PollWorkflow.from_dict(v) for i, v in active_polls.items()}
 
                 for active_poll in self._active_polls.values():
                     if active_poll.delayed_until:
@@ -155,7 +156,7 @@ class UserSession:
 
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
-                log_id, last_poll_ts, log = logs[0]
+                log_id, last_poll_name, last_poll_ts, log = logs[0]
 
                 if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == datetime.datetime.now(
                     self._user_config.timezone
@@ -171,9 +172,9 @@ class UserSession:
 
     async def add_poll_answer(self, poll_run_id: str, answer: str) -> PollWorkflow:
 
-        workflow = self._active_polls.get(poll_run_id)
+        workflow = self._active_polls.get(UUID(poll_run_id))
         if workflow is None:
-            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
         res = workflow.add_answer(answer=answer)
         match res:
@@ -202,9 +203,9 @@ class UserSession:
         return workflow
 
     async def close_poll(self, poll_run_id: str, save: bool):
-        workflow = self._active_polls.pop(poll_run_id, None)
+        workflow = self._active_polls.get(UUID(poll_run_id))
         if workflow is None:
-            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
         if save:
             if workflow.log_id is not None:
@@ -213,17 +214,19 @@ class UserSession:
                 self._data_connection.append_log(workflow.poll_name, *workflow.get_save_data())
 
     async def restart_poll(self, poll_run_id: str) -> PollWorkflow:
-        workflow = self._active_polls.get(poll_run_id)
+        workflow = self._active_polls.get(UUID(poll_run_id))
         if workflow is None:
-            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, poll_run_id)
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
-        self._active_polls[poll_run_id] = new_workflow = PollWorkflow(
+        self._active_polls[workflow.poll_run_id] = new_workflow = PollWorkflow(
             poll=workflow._poll, user=workflow._user, poll_run_id=poll_run_id
         )
 
         return new_workflow
 
-    async def get_all_poll_data(self) -> PollLogsSchema:
+    async def get_poll_data(
+        self, poll_name: str | None = None, count: int | None = None, skip: int | None = None
+    ) -> PollLogsSchema:
         if self.user_status <= UserSessionStatus.LOCKED:
             raise NerdDiaryError(
                 NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
@@ -231,27 +234,14 @@ class UserSession:
             )
 
         ret = PollLogsSchema(logs=[])
-        all_logs = self._data_connection.get_all_logs()
+        if poll_name or count or skip:
+            logs = self._data_connection.get_poll_logs(poll_code=poll_name, max_rows=count, skip=skip)
+        else:
+            logs = self._data_connection.get_all_logs()
 
-        for id, poll_name, poll_ts, data in all_logs:
+        for id, poll_name, poll_ts, data in logs:
             log = PollLogSchema(id=id, poll_name=poll_name, poll_ts=poll_ts, data=json.loads(data))
             ret.logs.append(log)
-
-        return ret
-
-    async def get_last_n_poll_logs(self) -> List[Dict[str, Any]] | None:
-        if self.user_status < UserSessionStatus.CONFIGURED:
-            return None
-
-        ret = []
-        all_logs = self._data_connection.get_all_logs()
-        for id, poll_name, poll_ts, data in all_logs:
-            d = {}
-            d["id"] = id
-            d["poll_name"] = poll_name
-            d["poll_ts"] = poll_ts
-            d["data"] = json.loads(data)
-            ret.append(d)
 
         return ret
 
@@ -300,7 +290,7 @@ class UserSession:
                 )
             if self._active_polls:
                 self._data_connection.store_user_data(
-                    json.dumps({i: v.to_dict() for i, v in self._active_polls.items()}, default=pydantic_encoder),
+                    json.dumps({str(i): v.to_dict() for i, v in self._active_polls.items()}, default=pydantic_encoder),
                     category=ACTIVE_POLL_DATA_CATEGORY,
                 )
 

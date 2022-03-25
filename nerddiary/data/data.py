@@ -202,9 +202,9 @@ class DataConnection(ABC):
 
     def get_all_logs(self) -> List[Tuple[int, str, datetime.datetime, str]]:
         """Get all serialized logs"""
-        raise NotImplementedError("This provider doesn't support row updates")  # pragma: no cover
+        return self.get_poll_logs()
 
-    def get_log(self, id: int) -> Tuple[int, datetime.datetime, str]:
+    def get_log(self, id: int) -> Tuple[int, str, datetime.datetime, str]:
         """Get a single serialized log identified by `id`"""
         ret = self.get_logs([id])
         if len(ret) == 1:
@@ -215,33 +215,29 @@ class DataConnection(ABC):
     def get_logs(
         self,
         ids: List[int],
-    ) -> List[Tuple[int, datetime.datetime, str]]:
+    ) -> List[Tuple[int, str, datetime.datetime, str]]:
         """Get a list of serialized logs identified by `ids`"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
     def get_poll_logs(
         self,
-        poll_code: str,
+        poll_code: str | None = None,
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
         skip: int | None = None,
-    ) -> List[Tuple[int, datetime.datetime, str]]:
+    ) -> List[Tuple[int, str, datetime.datetime, str]]:
         """Get a list of serialized logs for a given `poll_code` sorted by creation date, optionally filtered by `date_from`, `date_to` and optionally limited to `max_rows`+`skip` starting from `skip` (ordered by date DESC)"""
         raise NotImplementedError("This provider doesn't support retrieving rows")  # pragma: no cover
 
     def get_last_n_logs(
         self,
-        poll_code: str,
         count: int,
+        *,
+        poll_code: str | None = None,
         skip: int | None = None,
-    ) -> List[Tuple[int, datetime.datetime, str]]:
-        return self.get_poll_logs(poll_code, max_rows=count, skip=skip)
-
-    def get_last_logs(
-        self, poll_code: str, date_from: datetime.datetime, max_rows: int
-    ) -> List[Tuple[int, datetime.datetime, str]]:
-        return self.get_poll_logs(poll_code, date_from=date_from, max_rows=max_rows)
+    ) -> List[Tuple[int, str, datetime.datetime, str]]:
+        return self.get_poll_logs(poll_code=poll_code, max_rows=count, skip=skip)
 
 
 class SQLLiteProviderParams(BaseModel):
@@ -449,7 +445,7 @@ class SQLLiteConnection(DataConnection):
             else:
                 return None
 
-    def _query_and_decrypt(self, stmt: Select) -> List[Tuple[int, datetime.datetime, str]]:
+    def _query_and_decrypt(self, stmt: Select) -> List[Tuple[int, str, datetime.datetime, str]]:
         ret = []
         with self._engine.connect() as conn:
             result = conn.execute(stmt)
@@ -459,6 +455,7 @@ class SQLLiteConnection(DataConnection):
                 ret.append(
                     (
                         row["id"],
+                        row["poll_code"],
                         row["poll_ts"],
                         self._encryption_provider.decrypt(row["log"]).decode(),
                     )
@@ -469,7 +466,7 @@ class SQLLiteConnection(DataConnection):
     def get_logs(
         self,
         ids: List[int],
-    ) -> List[Tuple[int, datetime.datetime, str]]:
+    ) -> List[Tuple[int, str, datetime.datetime, str]]:
         stmt = self._poll_log_table.select().where(self._poll_log_table.c.id.in_(ids))
 
         return self._query_and_decrypt(stmt)
@@ -492,38 +489,21 @@ class SQLLiteConnection(DataConnection):
             else:
                 return False
 
-    def get_all_logs(self) -> List[Tuple[int, str, datetime.datetime, str]]:
-        stmt = self._poll_log_table.select()
-
-        ret = []
-        with self._engine.connect() as conn:
-            result = conn.execute(stmt)
-
-            rows = result.all()
-            for row in rows:
-                ret.append(
-                    (
-                        row["id"],
-                        row["poll_code"],
-                        row["poll_ts"],
-                        self._encryption_provider.decrypt(row["log"]).decode(),
-                    )
-                )
-
-        return ret
-
     def get_poll_logs(
         self,
-        poll_code: str,
+        poll_code: str | None = None,
         date_from: datetime.datetime | None = None,
         date_to: datetime.datetime | None = None,
         max_rows: int | None = None,
         skip: int | None = None,
-    ) -> List[Tuple[int, datetime.datetime, str]]:
+    ) -> List[Tuple[int, str, datetime.datetime, str]]:
         if not skip:
             skip = 0
 
-        stmt = self._poll_log_table.select().where(self._poll_log_table.c.poll_code == poll_code)
+        stmt = self._poll_log_table.select()
+
+        if poll_code:
+            stmt = stmt.where(self._poll_log_table.c.poll_code == poll_code)
 
         if date_from:
             stmt = stmt.where(self._poll_log_table.c.poll_ts >= date_from)

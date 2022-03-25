@@ -31,3 +31,4 @@ class ValueLabel(GenericModel, Generic[ValueType]):
 
     class Config:
         frozen = True
+        arbitrary_types_allowed = True

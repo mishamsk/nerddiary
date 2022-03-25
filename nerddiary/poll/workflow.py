@@ -30,7 +30,7 @@ class PollWorkflow:
         self,
         poll: Poll,
         user: User,
-        poll_run_id: UUID | str = uuid4(),
+        poll_run_id: UUID | str | int | bytes = uuid4(),
         log_id: int | None = None,
         answers_raw: Dict[str, ValueLabel] = {},
         current_question_code: str | None = None,
@@ -38,7 +38,15 @@ class PollWorkflow:
         delayed_at: datetime.datetime | None = None,
     ) -> None:
 
-        self._poll_run_id = poll_run_id if isinstance(poll_run_id, UUID) else UUID(poll_run_id)
+        if not isinstance(poll_run_id, UUID):
+            if isinstance(poll_run_id, int):
+                poll_run_id = UUID(int=poll_run_id)
+            if isinstance(poll_run_id, str):
+                poll_run_id = UUID(poll_run_id)
+            if isinstance(poll_run_id, bytes):
+                poll_run_id = UUID(bytes=poll_run_id)
+
+        self._poll_run_id = poll_run_id
         self._log_id: int | None = log_id
 
         # deepcopy poll to prevent config reloads impacting ongoing polls
@@ -64,8 +72,8 @@ class PollWorkflow:
         self._delayed_at: datetime.datetime | None = delayed_at
 
     @property
-    def poll_run_id(self) -> str:
-        return str(self._poll_run_id)
+    def poll_run_id(self) -> UUID:
+        return self._poll_run_id
 
     @property
     def poll_name(self) -> str:
@@ -220,7 +228,7 @@ class PollWorkflow:
         return {
             "poll": self._poll.dict(exclude_unset=True),
             "user": self._user.dict(exclude_unset=True),
-            "poll_run_id": self._poll_run_id.int,
+            "poll_run_id": str(self._poll_run_id),
             "log_id": self._log_id,
             "answers_raw": {q_code: answer.dict() for q_code, answer in self._answers_raw.items()},
             "current_question_code": self._current_question_code,
@@ -232,7 +240,7 @@ class PollWorkflow:
         return PollWorkflowStateSchema(
             user_id=self._user.id,
             poll_name=self.poll_name,
-            poll_run_id=self.poll_run_id,
+            poll_run_id=str(self.poll_run_id),
             completed=self.completed,
             delayed=self.delayed,
             delayed_for=str(self.delayed_for) if self.delayed_for else "",
@@ -283,7 +291,7 @@ class PollWorkflow:
         try:
             poll = Poll.parse_obj(serialized["poll"])
             user = User.parse_obj(serialized["user"])
-            poll_run_id = UUID(int=serialized["poll_run_id"])
+            poll_run_id = UUID(serialized["poll_run_id"])
             log_id = serialized["log_id"]
             answers_raw = {i: ValueLabel.parse_obj(v) for i, v in serialized["answers_raw"]}
             current_question_code = serialized["current_question_code"]

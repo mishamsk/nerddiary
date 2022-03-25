@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import tzinfo
 
+import pytz
 from pydantic import BaseModel, PrivateAttr, validator
 from pydantic.fields import Field
 
@@ -20,7 +21,7 @@ class User(BaseModel):
     lang_code: str = Field(
         default="en", min_length=2, max_length=2, description="User preferred language (2 letter code)"
     )
-    timezone: Optional[TimeZone]
+    timezone: TimeZone = pytz.timezone("US/Eastern")  # type: ignore
     polls: Optional[List[Poll]] = Field(min_items=1)
     reports: Optional[List[Report]] = Field(min_items=1)
 

@@ -63,8 +63,8 @@ class AsyncApplication(abc.ABC):
                 res = self._run_coro(self._arun())
         except KeyboardInterrupt:
             raise
-        except BaseException as e:
-            self._logger.error("Unhandled exception while running the app.\n" + str(e))
+        except BaseException:
+            self._logger.exception("Unhandled exception while running the app.")
             raise
         finally:
             self._logger.debug("Closing the app")

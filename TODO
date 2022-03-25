@@ -5,6 +5,7 @@ Bugs:
     ☐ When redoing once-per-day poll - if fails to start on "start_time" not in questions_dict (maybe due to changes in config) - MAYBE ACTAULLY THE SAME AS ABOVE
     ☐ Server doesn't remove disconnected clients? After reconnect, old client id was still in the list of exclusions for the broadcast
         2022-03-23 15:42:39,105 - DEBUG - nerddiary.server - _notification_dispatch - Starting broadcasting notification: type=<NotificationType.SERVER_CLIENT_CONNECTED: 101> data=client_id='43d2a290-902c-42b6-80d7-70df6d4ad271' source='43d2a290-902c-42b6-80d7-70df6d4ad271' exclude={'34515a95-119c-4a4b-9e8c-fd84b8a7efa6', '43d2a290-902c-42b6-80d7-70df6d4ad271'}
+    ☐ When exception happens in API functions (like pollmixin module), session is not cleaning up properly (e.g. active workflow remains)
 Features:
     ☐ Upload records command @high
     ☐ Add list recent records @high
@@ -39,7 +40,7 @@ Optimization:
     ☐ Consider ujson (used by FastAPI optionally) or orjson for pydantic and json rpc
     ☐ Alternative asyncio loop (see uvloop)
     ☐ "Uvicorn => Uvicorn[standard] (based on uvloop websockets)"
-    ☐ Consider removing excessive debug logging (maybe depending on whether it is a production bundle or not?)
+    ☐ Consider removing excessive debug logging (https://docs.python.org/3/howto/logging.html#optimization)
     ☐ Async data provider[GitHub - encode/databases: Async database support for Python. 🗄](https://github.com/encode/databases)
         ☐ Change to async DataProvider API
         ☐ Create an Async version of SQLite provider/connection

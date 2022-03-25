@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
 
 from nerddiary.poll.type import (
+    AuroTimestampType,
     DependantSelectType,
     QuestionType,
-    RelativeTimestampType,
     SelectType,
     TimestampType,
     UnsupportedAnswerError,
@@ -115,7 +115,7 @@ class TestDependantSelectType:
         }
         """
         wrong_dependency_1 = SelectType.parse_raw(json)
-        wrong_dependency_2 = TimestampType()
+        wrong_dependency_2 = AuroTimestampType()
 
         json = """
         {
@@ -239,7 +239,7 @@ class TestDependantSelectType:
 class TestTimestampType:
     def test_correct_function(self):
 
-        time = TimestampType()
+        time = AuroTimestampType()
 
         assert time.type == "timestamp"
         assert time.is_auto is True
@@ -269,13 +269,13 @@ class TestTimestampType:
 
         assert time.serialize_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
 
-        assert time.check_dependency_type(TimestampType()) is False
+        assert time.check_dependency_type(AuroTimestampType()) is False
 
 
 class TestRelativeTimestampType:
     def test_correct_function(self):
 
-        time = RelativeTimestampType()
+        time = TimestampType()
 
         assert time.type == "relative_timestamp"
         assert time.is_auto is False
@@ -340,4 +340,4 @@ class TestRelativeTimestampType:
 
         assert time.serialize_value(ValueLabel(value=now_aware, label="Smth")) == now_aware.isoformat()
 
-        assert time.check_dependency_type(TimestampType()) is False
+        assert time.check_dependency_type(AuroTimestampType()) is False

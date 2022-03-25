@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import abc
-import datetime
 import logging
-import re
 
+import arrow
 from pydantic import BaseModel, conlist, validator
 from pydantic.fields import Field, PrivateAttr
 
@@ -243,8 +242,8 @@ class DependantSelectType(QuestionType):
         return True
 
 
-class TimestampType(QuestionType):
-    type = "timestamp"
+class AuroTimestampType(QuestionType):
+    type = "auto_timestamp"
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -253,35 +252,35 @@ class TimestampType(QuestionType):
         self._must_depend = False
 
     def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
-        return datetime.datetime
+        return arrow.Arrow
 
     def get_auto_value(
         self, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> ValueLabel[datetime.datetime] | None:
-        if user is not None:
-            now = datetime.datetime.now(user.timezone)
-        else:
-            now = datetime.datetime.now()
+    ) -> ValueLabel[arrow.Arrow] | None:
 
-        return ValueLabel[datetime.datetime](
+        now = arrow.now(user.timezone)
+
+        return ValueLabel[arrow.Arrow](
             value=now,
-            label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
+            label="⏰ " + now.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
         )
 
-    def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
-        return value.value.isoformat()
+    def serialize_value(self, value: ValueLabel[arrow.Arrow]) -> str:
+        return value.value.for_json()
 
     def deserialize_value(
         self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> ValueLabel[datetime.datetime]:
-        return ValueLabel[datetime.datetime](
-            value=datetime.datetime.fromisoformat(serialized),
-            label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),
+    ) -> ValueLabel[arrow.Arrow]:
+        time = arrow.get(serialized)
+
+        return ValueLabel[arrow.Arrow](
+            value=time,
+            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
         )
 
 
-class RelativeTimestampType(QuestionType):
-    type = "relative_timestamp"
+class TimestampType(QuestionType):
+    type = "timestamp"
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -289,68 +288,33 @@ class RelativeTimestampType(QuestionType):
         self._auto = False
         self._must_depend = False
         # TODO: make translatable
-        self.value_hint = "Примеры: 2, значит 2 часа назад; 3 дня, 2:12, значит 3 дня 2 часа 12 минут назад. Полный фомат: [ДД дня/день/дней, ][ЧЧ[:ММ[:СС]]"
-
-    @staticmethod
-    def _parse_duration(value: str) -> datetime.timedelta:
-        """
-        Parse a duration string and return a datetime.timedelta.
-        """
-        duration_re = re.compile(
-            r"^"
-            r"(?:(?P<days>-?\d+) (?:дня|дней|день)(, )?)?"
-            r"((?:(?P<hours>-?\d{1,2}):?)(?=\d{2}|\d+:\d+|$))?"
-            r"(?:(?P<minutes>-?\d+):?)?"
-            r"(?P<seconds>-?\d+)?"
-            # r"(?:\.(?P<microseconds>\d{1,6})\d{0,6})?"
-            r"$"
-        )
-
-        try:
-            match = duration_re.match(value)
-        except TypeError:
-            raise TypeError("invalid type; expected string")
-
-        if not match:
-            raise UnsupportedAnswerError()
-
-        kw = match.groupdict()
-
-        if kw.get("hours") and kw["hours"].startswith("-"):
-            if kw.get("minutes"):
-                kw["minutes"] = "-" + kw["minutes"]
-            if kw.get("seconds"):
-                kw["seconds"] = "-" + kw["seconds"]
-
-        if kw.get("days") and kw["days"].startswith("-"):
-            if kw.get("hours"):
-                kw["hours"] = "-" + kw["hours"]
-            if kw.get("minutes"):
-                kw["minutes"] = "-" + kw["minutes"]
-            if kw.get("seconds"):
-                kw["seconds"] = "-" + kw["seconds"]
-
-        kw_ = {k: float(v) for k, v in kw.items() if v is not None}
-
-        return datetime.timedelta(**kw_)
+        self.value_hint = "Дата (можно с временем) в формате: 2021-01-30 [14:00:15] или период относительно текущего времени:  2 часа назад"
 
     def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
-        return datetime.datetime
+        return arrow.Arrow
 
     def get_value_from_answer(
         self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> ValueLabel[datetime.datetime] | None:
+    ) -> ValueLabel[arrow.Arrow] | None:
 
-        delta = RelativeTimestampType._parse_duration(answer)
+        time = None
+        try:
+            time = arrow.get(answer, locale=user.lang_code if user else "en")
+        except arrow.ParserError:
+            pass
 
-        if user is not None:
-            now = datetime.datetime.now(user.timezone) - delta
-        else:
-            now = datetime.datetime.now() - delta
+        if time is None:
+            try:
+                time = arrow.now(user.timezone if user else None).dehumanize(answer)
+            except ValueError:
+                pass
 
-        return ValueLabel[datetime.datetime](
-            value=now,
-            label="⏰ " + now.strftime("%m/%d/%Y %H:%M:%S"),
+        if time is None:
+            return None
+
+        return ValueLabel[arrow.Arrow](
+            value=time,
+            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
         )
 
     @property
@@ -361,16 +325,19 @@ class RelativeTimestampType(QuestionType):
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> t.List[ValueLabel[str]] | None:
-        # TODO: make translatable
-        return [ValueLabel[str](value="0", label="Только что"), ValueLabel[str](value="1", label="Час назад")]
+        now_str = arrow.get().humanize(locale=user.lang_code if user else "en")
+        hour_ago_str = arrow.get().shift(hours=-1).humanize(locale=user.lang_code if user else "en")
+        return [ValueLabel[str](value=now_str, label=now_str), ValueLabel[str](value=hour_ago_str, label=hour_ago_str)]
 
-    def serialize_value(self, value: ValueLabel[datetime.datetime]) -> str:
-        return value.value.isoformat()
+    def serialize_value(self, value: ValueLabel[arrow.Arrow]) -> str:
+        return value.value.for_json()
 
     def deserialize_value(
         self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
-    ) -> ValueLabel[datetime.datetime]:
-        return ValueLabel[datetime.datetime](
-            value=datetime.datetime.fromisoformat(serialized),
-            label="⏰ " + datetime.datetime.fromisoformat(serialized).strftime("%m/%d/%Y %H:%M:%S"),
+    ) -> ValueLabel[arrow.Arrow]:
+        time = arrow.get(serialized)
+
+        return ValueLabel[arrow.Arrow](
+            value=time,
+            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
         )
