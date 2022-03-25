@@ -1,18 +1,18 @@
 Bugs:
-    ☐ Head poll won't start. For some reason it takes last Morning poll record to init... @today
-    ☐ Many session endpoints won't capture and log errors properly @today
+    ☐ Many session endpoints won't capture and log errors properly + jsonrpcserver logs to root... @today
     ☐ Hide poll, config data from debug log @high
-    ☐ When redoing once-per-day poll - if fails to start on "start_time" not in questions_dict (maybe due to changes in config) - MAYBE ACTAULLY THE SAME AS ABOVE
     ☐ Server doesn't remove disconnected clients? After reconnect, old client id was still in the list of exclusions for the broadcast
         2022-03-23 15:42:39,105 - DEBUG - nerddiary.server - _notification_dispatch - Starting broadcasting notification: type=<NotificationType.SERVER_CLIENT_CONNECTED: 101> data=client_id='43d2a290-902c-42b6-80d7-70df6d4ad271' source='43d2a290-902c-42b6-80d7-70df6d4ad271' exclude={'34515a95-119c-4a4b-9e8c-fd84b8a7efa6', '43d2a290-902c-42b6-80d7-70df6d4ad271'}
     ☐ When exception happens in API functions (like pollmixin module), session is not cleaning up properly (e.g. active workflow remains)
+    ☐ Client will strangly die on asyncio.exceptions.TimeoutError and hang on closing (to reroduce - enter debugging on the server)
 Features:
     ☐ Upload records command @high
     ☐ Add list recent records @high
     ☐ Add backdated record (remember that for once_a_day we need to check if it exist and rewrite or enter edit mode) @high
     ☐ Add edit functionality maybe same as backdated - always remove and write new. @high
     ☐ Support Default value (as select option) for manual inputs (e.g. default sleep time) @low
-    ☐ Non-auto timestamp type @low
+    ☐ Time only type @low
+    ✔ Non-auto timestamp type @low @done(22-03-25 00:00)
     ☐ Do not remind if once_per_day_poll was already asked today @low
     ☐ Better handle server errors (currently message dispatcher will just stop of error and nothing happens)
     ☐ Change password feature
@@ -48,6 +48,8 @@ Documentation:
     ☐ Documentation[autodoc-pydantic](https://pypi.org/project/autodoc-pydantic/)
 
 Archive:
+  ✔ Head poll won't start. For some reason it takes last Morning poll record to init... @today @done(22-03-25 00:00) @project(Bugs)
+  ✔ When redoing once-per-day poll - if fails to start on "start_time" not in questions_dict (maybe due to changes in config) - MAYBE ACTAULLY THE SAME AS ABOVE @done(22-03-25 00:00) @project(Bugs)
   ✔ Add reload_config @high @done(22-03-24 00:20) @project(Features)
   ✔ Server error on config save (duplicate constraint - data provider doesn't use update...) @started(22-03-23 23:59) @done(22-03-24 00:00) @lasted(1m) @project(Bugs)
   ✔ Add download all @today @done(22-03-23 17:15) @project(Features)

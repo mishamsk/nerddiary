@@ -32,7 +32,7 @@ class PollWorkflow:
         user: User,
         poll_run_id: UUID | str | int | bytes = uuid4(),
         log_id: int | None = None,
-        answers_raw: Dict[str, ValueLabel] = {},
+        answers_raw: Dict[str, ValueLabel] | None = None,
         current_question_code: str | None = None,
         poll_ts: datetime.datetime | None = None,
         delayed_at: datetime.datetime | None = None,
@@ -51,7 +51,7 @@ class PollWorkflow:
 
         # deepcopy poll to prevent config reloads impacting ongoing polls
         self._poll = deepcopy(poll)
-        self._answers_raw: Dict[str, ValueLabel] = answers_raw
+        self._answers_raw: Dict[str, ValueLabel] = answers_raw if answers_raw else {}
         self._user = user
         self._current_question_code: str = current_question_code or self._poll.questions[0].code
 
