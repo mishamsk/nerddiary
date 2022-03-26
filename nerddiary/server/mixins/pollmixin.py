@@ -162,3 +162,53 @@ class PollMixin:
         }
         self._logger.debug("Success")
         return Success(ret)
+
+    @method  # type:ignore
+    async def get_poll_log(
+        self: ServerProtocol,
+        user_id: str,
+        log_id: int,
+    ) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        try:
+            poll_workflow = await ses.get_poll_log(log_id=log_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        ret = {
+            "schema": "PollWorkflowStateSchema",
+            "data": poll_workflow.to_schema().dict(exclude_unset=True),
+        }
+        self._logger.debug("Success")
+        return Success(ret)
+
+    @method  # type:ignore
+    async def get_poll_worflow(self: ServerProtocol, user_id: str, poll_run_id: str) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        try:
+            poll_workflow = await ses.get_poll_worflow(poll_run_id=poll_run_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        ret = {
+            "schema": "PollWorkflowStateSchema",
+            "data": poll_workflow.to_schema().dict(exclude_unset=True),
+        }
+        self._logger.debug("Success")
+        return Success(ret)

@@ -92,6 +92,7 @@ class PollWorkflowStateSchema(PollWorkflowSchema):
     completed: bool
     delayed: bool
     delayed_for: str
+    poll_ts: datetime.datetime
     current_question_display_name: str
     current_question_code: str
     current_question_description: str | None

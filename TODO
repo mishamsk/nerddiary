@@ -7,19 +7,15 @@ Bugs:
     ☐ Client will strangly die on asyncio.exceptions.TimeoutError and hang on closing (to reroduce - enter debugging on the server)
 Features:
     ☐ Upload records command @high
-    ☐ Add list recent records @high
     ☐ Add backdated record (remember that for once_a_day we need to check if it exist and rewrite or enter edit mode) @high
-    ☐ Add edit functionality maybe same as backdated - always remove and write new. @high
     ☐ Support Default value (as select option) for manual inputs (e.g. default sleep time) @low
     ☐ Time only type @low
-    ✔ Non-auto timestamp type @low @done(22-03-25 00:00)
     ☐ Do not remind if once_per_day_poll was already asked today @low
     ☐ Better handle server errors (currently message dispatcher will just stop of error and nothing happens)
     ☐ Change password feature
     ☐ Support for non int user ids (Currently data provider assumes id is a valid string to create a folder)
-    ☐ Password enhancementsdelete data if not recoverable
-    ☐ Add poll timeout on the server
-        ☐ Add validation that timeout is higher than longest delay among all users
+    ☐ Password enhancements (delete data if not recoverable)
+    ☐ Add poll timeout on the server (check that poll is not delayed when cancelling)
     ☐ Mixed select + manual value
     ☐ Allow skipping questions on particular answers (set default/automatic answer)
 Reporting:
@@ -48,6 +44,9 @@ Documentation:
     ☐ Documentation[autodoc-pydantic](https://pypi.org/project/autodoc-pydantic/)
 
 Archive:
+  ✔ Add list recent records @high @done(22-03-26 00:02) @project(Features)
+  ✔ Add edit functionality maybe same as backdated - always remove and write new. @high @done(22-03-26 00:02) @project(Features)
+  ✔ Non-auto timestamp type @low @done(22-03-25 00:00) @project(Features)
   ✔ Head poll won't start. For some reason it takes last Morning poll record to init... @today @done(22-03-25 00:00) @project(Bugs)
   ✔ When redoing once-per-day poll - if fails to start on "start_time" not in questions_dict (maybe due to changes in config) - MAYBE ACTAULLY THE SAME AS ABOVE @done(22-03-25 00:00) @project(Bugs)
   ✔ Add reload_config @high @done(22-03-24 00:20) @project(Features)

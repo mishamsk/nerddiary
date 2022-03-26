@@ -241,6 +241,7 @@ class PollWorkflow:
             user_id=self._user.id,
             poll_name=self.poll_name,
             poll_run_id=str(self.poll_run_id),
+            poll_ts=self.poll_ts,
             completed=self.completed,
             delayed=self.delayed,
             delayed_for=str(self.delayed_for) if self.delayed_for else "",

@@ -245,6 +245,38 @@ class UserSession:
 
         return ret
 
+    async def get_poll_log(self, log_id: int) -> PollWorkflow:
+        if self.user_status <= UserSessionStatus.LOCKED:
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                "Requested data, but user session is either locked or not configured.",
+            )
+
+        id, poll_name, poll_ts, data = self._data_connection.get_log(id=log_id)
+
+        assert self._user_config
+
+        poll = self._user_config._polls_dict.get(poll_name)
+        if poll is None:
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND, poll_name)
+
+        workflow = PollWorkflow.from_store_data(
+            poll=poll,
+            user=self._user_config,
+            log_id=id,
+            poll_ts=poll_ts,
+            log=data,
+        )
+        self._active_polls[workflow.poll_run_id] = workflow
+        return workflow
+
+    async def get_poll_worflow(self, poll_run_id: str) -> PollWorkflow:
+        workflow = self._active_polls.get(UUID(poll_run_id))
+        if workflow is None:
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
+
+        return workflow
+
     async def close_all_polls(self, save: bool):
         for workflow in self._active_polls.values():
             if save:
