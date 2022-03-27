@@ -16,6 +16,7 @@ class NerdDiaryErrorCode(enum.IntEnum):
     SESSION_DATA_PARSE_ERROR = -105
     SESSION_POLL_NOT_FOUND = -106
     SESSION_POLL_ANSWER_UNSUPPORTED_VALUE = -107
+    SESSION_POLL_NO_DEFAULT_VALUE = -108
     SESSION_POLL_RUN_ID_NOT_FOUND = -109
     SESSION_INVALID_USER_CONFIGURATION = -110
     SESSION_POLL_ALREADY_ACTIVE = -111
@@ -38,6 +39,7 @@ ND_ERROR_MESSAGES = {
     NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND: "Poll with the name <{}> wasn't found",
     NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND: "Poll with run id <{}> wasn't found",
     NerdDiaryErrorCode.SESSION_POLL_ANSWER_UNSUPPORTED_VALUE: "Unsupported poll answer value was provided",
+    NerdDiaryErrorCode.SESSION_POLL_NO_DEFAULT_VALUE: "Current question has no default value",
     NerdDiaryErrorCode.SESSION_POLL_ALREADY_ACTIVE: "A poll <{}> is already active. Can't start the second poll because it is set to 'Once per day'",
     NerdDiaryErrorCode.SESSION_INCORRECT_PASSWORD_OR_KEY: "Incorrect password or key",
     NerdDiaryErrorCode.SESSION_INVALID_USER_CONFIGURATION: "User configuration file is not valid",

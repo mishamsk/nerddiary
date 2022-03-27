@@ -7,6 +7,7 @@ import enum
 import json
 
 from pydantic import BaseModel
+from pydantic.json import pydantic_encoder
 
 from ..primitive.valuelabel import ValueLabel
 from .session.status import UserSessionStatus
@@ -20,7 +21,8 @@ def generate_notification(type: NotificationType, data: Schema | None = None) ->
             {
                 "notification": str(type.value),
                 "data": {"schema": data.__class__.__name__, "data": data.dict()},
-            }
+            },
+            default=pydantic_encoder,
         )
     else:
         return json.dumps(
@@ -74,7 +76,7 @@ class PollsSchema(Schema):
 
 
 class PollLogSchema(Schema):
-    id: int
+    id: int | None = None
     poll_name: str
     poll_ts: datetime.datetime
     data: Dict[str, str]
@@ -99,5 +101,6 @@ class PollWorkflowStateSchema(PollWorkflowSchema):
     current_question_value_hint: str | None
     current_question_allow_manual_answer: bool
     current_question_select_list: List[ValueLabel[str]] | None
+    current_question_default_value: str | None
     questions: List[str]
     answers: List[str]

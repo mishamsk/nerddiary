@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from jsonrpcserver import Error, Result, Success, method
+import datetime
+
+from jsonrpcserver import Error, InvalidParams, Result, Success, method
 
 from ...error.error import NerdDiaryError
 from ..proto import ServerProtocol
-from ..schema import PollExtendedSchema, PollsSchema
+from ..schema import PollExtendedSchema, PollLogsSchema, PollsSchema
 
 
 class PollMixin:
@@ -42,7 +44,7 @@ class PollMixin:
         return Success(ret)
 
     @method  # type:ignore
-    async def start_poll(self: ServerProtocol, user_id: str, poll_name: str) -> Result:
+    async def start_poll(self: ServerProtocol, user_id: str, poll_name: str, poll_ts_iso: str | None = None) -> Result:
         self._logger.debug("Processing RPC call")
 
         try:
@@ -51,9 +53,17 @@ class PollMixin:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
 
+        poll_ts = None
+        if poll_ts_iso:
+            try:
+                poll_ts = datetime.datetime.fromisoformat(poll_ts_iso)
+            except ValueError:
+                self._logger.exception(f"Error parsing poll_ts_iso: {poll_ts_iso!r}")
+                return InvalidParams(f"Invalid ISO timestamp: {poll_ts_iso}")
+
         poll_workflow = None
         try:
-            poll_workflow = await ses.start_poll(poll_name)
+            poll_workflow = await ses.start_poll(poll_name, poll_ts=poll_ts)
         except NerdDiaryError as err:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
@@ -78,6 +88,30 @@ class PollMixin:
         poll_workflow = None
         try:
             poll_workflow = await ses.add_poll_answer(poll_run_id=poll_run_id, answer=answer)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        ret = {
+            "schema": "PollWorkflowStateSchema",
+            "data": poll_workflow.to_schema().dict(exclude_unset=True),
+        }
+        self._logger.debug("Success")
+        return Success(ret)
+
+    @method  # type:ignore
+    async def add_default_poll_answer(self: ServerProtocol, user_id: str, poll_run_id: str) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        poll_workflow = None
+        try:
+            poll_workflow = await ses.add_default_poll_answer(poll_run_id=poll_run_id)
         except NerdDiaryError as err:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)
@@ -210,5 +244,25 @@ class PollMixin:
             "schema": "PollWorkflowStateSchema",
             "data": poll_workflow.to_schema().dict(exclude_unset=True),
         }
+        self._logger.debug("Success")
+        return Success(ret)
+
+    @method  # type:ignore
+    async def log_poll_data(self: ServerProtocol, user_id: str, poll_data: str) -> Result:
+        self._logger.debug("Processing RPC call")
+
+        try:
+            ses = await self._sessions.get(user_id)
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
+        ret = 0
+        try:
+            ret = await ses.log_poll_data(data=PollLogsSchema.parse_raw(poll_data))
+        except NerdDiaryError as err:
+            self._logger.debug(f"Error: {err!r}")
+            return Error(err.code, err.message, err.data)
+
         self._logger.debug("Success")
         return Success(ret)

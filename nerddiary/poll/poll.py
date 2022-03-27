@@ -82,7 +82,7 @@ class Poll(BaseModel):
         for q in v:
             q_dict |= {q.code: q}
 
-        for name, question in q_dict.items():
+        for code, question in q_dict.items():
             if question.depends_on:
                 if question.depends_on not in previous:
                     raise ValueError(
@@ -94,18 +94,17 @@ class Poll(BaseModel):
                         f"Question <{question.display_name}> is of type that is not compatible with the dependcy question <{question.depends_on}>"
                     )
 
-            previous.append(name)
+            previous.append(code)
 
         return v
 
     @validator("questions")
     def dependant_question_cannot_depend_on_ephemeral(cls, v: List[Question]):
-        # Check that dependant question exists and has already been processed (comes earlier)
         q_dict: Dict[str, Question] = {}
         for q in v:
             q_dict |= {q.code: q}
 
-        for name, question in q_dict.items():
+        for question in q_dict.values():
             if question.depends_on:
                 if q_dict[question.depends_on].ephemeral:
                     raise ValueError(
@@ -116,7 +115,6 @@ class Poll(BaseModel):
 
     @validator("questions", each_item=True)
     def dependant_question_type_must_support_it(cls, v: Question):
-        # Check that dependant question exists and has already been processed (comes earlier)
         if v.depends_on and not v._type.is_dependent:  # type:ignore
             raise ValueError(
                 f"Question <{v.display_name}> depends on <{v.depends_on}> but is not of a type that can be dependant"
@@ -129,5 +127,44 @@ class Poll(BaseModel):
         opd = values.get("once_per_day")
         if opd is not None and not opd and v:
             raise ValueError("`hours_over_midgnight` can only be set for `once_per_day` polls")
+
+        return v
+
+    @validator("questions")
+    def skipped_questions_must_have_default_value(cls, v: List[Question]):
+        q_dict: Dict[str, Question] = {}
+        for q in v:
+            q_dict |= {q.code: q}
+
+        for question, index in zip(q_dict.values(), itertools.count()):
+            if question.skip_on:
+                for skip_to_code in question.skip_on.values():
+                    for skip_i in range(index + 1, len(v)):
+                        if v[skip_i].code == skip_to_code:
+                            break
+
+                        if v[skip_i].default_value is None:
+                            raise ValueError(
+                                f"Question <{v[skip_i].display_name}> may be skipped because <{question.display_name}> defines skip_on values. But <{v[skip_i].display_name}> does not have a default value"
+                            )
+
+        return v
+
+    @validator("questions")
+    def skip_to_question_must_follow_skipped(cls, v: List[Question]):
+        q_dict: Dict[str, Question] = {}
+        for q in v:
+            q_dict |= {q.code: q}
+
+        for question, index in zip(q_dict.values(), itertools.count()):
+            if question.skip_on:
+                dest_q = set(question.skip_on.values())
+                following_q = set([v[skip_i].code for skip_i in range(index + 1, len(v))])
+                # Include empty (skip to the end)
+                following_q.add("")
+                if not dest_q.issubset(following_q):
+                    raise ValueError(
+                        f"Questions with codes: <{str(dest_q - following_q)}> listed as the ones to skip to for question <{question.display_name}>, but they are either not following it, or not defined"
+                    )
 
         return v

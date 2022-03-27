@@ -76,7 +76,7 @@ class UserSession:
                     for poll in self._user_config.polls:
                         if poll.reminder_time:
                             self._session_spawner._scheduler.add_job(
-                                func=self._session_spawner.notify,
+                                func=self.check_and_notify,
                                 trigger=CronTrigger(
                                     day_of_week=",".join(map(str, tuple(range(7)))),
                                     hour=poll.reminder_time.hour,
@@ -84,10 +84,7 @@ class UserSession:
                                     second=poll.reminder_time.second,
                                     timezone=poll.reminder_time.tzinfo,
                                 ),
-                                args=(
-                                    NotificationType.SERVER_POLL_REMINDER,
-                                    PollBaseSchema(user_id=self.user_id, poll_name=poll.poll_name),
-                                ),
+                                args=(poll.poll_name,),
                                 max_instances=1,  # type: ignore
                                 coalesce=True,  # type: ignore
                                 misfire_grace_time=10,  # type: ignore
@@ -136,7 +133,7 @@ class UserSession:
 
         return self._user_config.polls
 
-    async def start_poll(self, poll_name: str) -> PollWorkflow:
+    async def start_poll(self, poll_name: str, poll_ts: datetime.datetime | None = None) -> PollWorkflow:
         if not self.user_status >= UserSessionStatus.CONFIGURED:
             raise NerdDiaryError(
                 NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
@@ -149,26 +146,66 @@ class UserSession:
         if poll is None:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND, poll_name)
 
+        workflow = PollWorkflow(
+            poll=poll,
+            user=self._user_config,
+            poll_ts=poll_ts.replace(tzinfo=self._user_config.timezone) if poll_ts else None,
+        )
+
         if poll.once_per_day:
+            compare_ts = poll_ts or datetime.datetime.now(tz=self._user_config.timezone)
+
             for active_poll in self._active_polls.values():
                 if active_poll.poll_name == poll_name:
-                    raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_ALREADY_ACTIVE, poll_name)
+                    if active_poll.poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    ):
+                        raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_ALREADY_ACTIVE, poll_name)
 
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
                 log_id, last_poll_name, last_poll_ts, log = logs[0]
 
-                if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == datetime.datetime.now(
-                    self._user_config.timezone
-                ).replace(hour=0, minute=0, second=0, microsecond=0):
+                if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ):
                     workflow = PollWorkflow.from_store_data(
                         poll=poll, user=self._user_config, log_id=log_id, poll_ts=last_poll_ts, log=log
                     )
-                    pass
 
-        workflow = PollWorkflow(poll=poll, user=self._user_config)
         self._active_polls[workflow.poll_run_id] = workflow
         return workflow
+
+    async def check_and_notify(self, poll_name: str):
+        assert self._user_config
+
+        poll = self._user_config._polls_dict.get(poll_name)
+        if poll is None:
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_NOT_FOUND, poll_name)
+
+        if poll.once_per_day:
+            compare_ts = datetime.datetime.now(tz=self._user_config.timezone)
+
+            for active_poll in self._active_polls.values():
+                if active_poll.poll_name == poll_name:
+                    if active_poll.poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    ):
+                        return
+
+            logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
+            if logs:
+                log_id, last_poll_name, last_poll_ts, log = logs[0]
+
+                if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ):
+                    return
+
+        await self._session_spawner.notify(
+            NotificationType.SERVER_POLL_REMINDER,
+            PollBaseSchema(user_id=self.user_id, poll_name=poll.poll_name),
+        )
 
     async def add_poll_answer(self, poll_run_id: str, answer: str) -> PollWorkflow:
 
@@ -199,6 +236,38 @@ class UserSession:
                 pass
             case AddAnswerResult.ERROR:
                 raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_ANSWER_UNSUPPORTED_VALUE)
+
+        return workflow
+
+    async def add_default_poll_answer(self, poll_run_id: str) -> PollWorkflow:
+
+        workflow = self._active_polls.get(UUID(poll_run_id))
+        if workflow is None:
+            raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
+
+        res = workflow.add_default()
+        match res:
+            case AddAnswerResult.DELAY:
+                assert workflow.delayed_until
+
+                self._session_spawner._scheduler.add_job(
+                    func=self._session_spawner.notify,
+                    trigger=DateTrigger(run_date=workflow.delayed_until),
+                    args=(
+                        NotificationType.SERVER_POLL_DELAY_PASSED,
+                        workflow.to_schema(),
+                    ),
+                    max_instances=1,  # type: ignore
+                    coalesce=True,  # type: ignore
+                    misfire_grace_time=10,  # type: ignore
+                    name=f"{poll_run_id}/{workflow.current_question_code}",
+                )
+            case AddAnswerResult.COMPLETED:
+                pass
+            case AddAnswerResult.ADDED:
+                pass
+            case AddAnswerResult.ERROR:
+                raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_NO_DEFAULT_VALUE)
 
         return workflow
 
@@ -276,6 +345,35 @@ class UserSession:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
         return workflow
+
+    async def log_poll_data(self, data: PollLogsSchema) -> int:
+        if self.user_status <= UserSessionStatus.LOCKED:
+            raise NerdDiaryError(
+                NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,
+                "Requested to log data, but user session is either locked or not configured.",
+            )
+
+        assert self._user_config
+
+        ret = 0
+        for poll in data.logs:
+            poll_conf = self._user_config._polls_dict.get(poll.poll_name)
+            if not poll_conf:
+                self._session_spawner._logger.warning("Poll config not found: %s", poll.poll_name)
+                continue
+
+            workflow = PollWorkflow.from_store_data(
+                poll=poll_conf, user=self._user_config, poll_ts=poll.poll_ts, log=json.dumps(poll.data), log_id=poll.id
+            )
+
+            if workflow.log_id is not None:
+                self._data_connection.update_log(workflow.log_id, *workflow.get_save_data())
+            else:
+                self._data_connection.append_log(workflow.poll_name, *workflow.get_save_data())
+
+            ret += 1
+
+        return ret
 
     async def close_all_polls(self, save: bool):
         for workflow in self._active_polls.values():

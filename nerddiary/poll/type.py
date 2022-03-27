@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import datetime
 import logging
 
 import arrow
@@ -130,7 +131,11 @@ class SelectType(QuestionType):
     def deserialize_value(
         self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel[str]:
-        return ValueLabel[str](value=serialized, label=serialized)
+        candidates = [vl for vl in self.select if vl.value == serialized]
+        if not candidates:
+            raise ValueError()
+
+        return candidates[0]
 
     def get_answer_options(
         self, dep_value: ValueLabel | None = None, user: User | None = None
@@ -204,7 +209,7 @@ class DependantSelectType(QuestionType):
 
         candidates = [vl for vl in self.select[dep_value.value] if vl.value == serialized]
         if not candidates:
-            raise UnsupportedAnswerError()
+            raise ValueError()
 
         return candidates[0]
 
@@ -340,4 +345,64 @@ class TimestampType(QuestionType):
         return ValueLabel[arrow.Arrow](
             value=time,
             label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
+        )
+
+
+class TimeType(QuestionType):
+    type = "time"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        self._auto = False
+        self._must_depend = False
+        # TODO: make translatable
+        self.value_hint = "Время в формате (можно с секундаами): 14:00[:15]"
+
+    def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
+        return datetime.time
+
+    def get_value_from_answer(
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[datetime.time] | None:
+
+        tm = None
+        try:
+            tm = datetime.time.fromisoformat(answer)
+        except ValueError:
+            pass
+
+        if tm is None:
+            return None
+
+        return ValueLabel[datetime.time](
+            value=tm,
+            label="⏰ " + tm.isoformat(timespec="seconds"),
+        )
+
+    @property
+    def allows_manual(self) -> bool:
+        """Returns True if question type allows arbitrary manual value as input"""
+        return True
+
+    def get_answer_options(
+        self, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> t.List[ValueLabel[str]] | None:
+        now_str = arrow.now(tz=user.timezone if user else None).time().isoformat(timespec="seconds")
+        hour_ago_str = (
+            arrow.now(tz=user.timezone if user else None).shift(hours=-1).time().isoformat(timespec="seconds")
+        )
+        return [ValueLabel[str](value=now_str, label=now_str), ValueLabel[str](value=hour_ago_str, label=hour_ago_str)]
+
+    def serialize_value(self, value: ValueLabel[datetime.time]) -> str:
+        return value.value.isoformat(timespec="seconds")
+
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[datetime.time]:
+        time = datetime.time.fromisoformat(serialized)
+
+        return ValueLabel[datetime.time](
+            value=time,
+            label="⏰ " + time.isoformat(timespec="seconds"),
         )

@@ -203,6 +203,59 @@ class PollWorkflow:
             self._delayed_at = datetime.datetime.now()
             return AddAnswerResult.DELAY
 
+        if question.skip_on:
+            ser_value = question._type.serialize_value(value)
+            if ser_value in question.skip_on:
+                skip_to_code = question.skip_on[ser_value]
+
+                while True:
+                    self._add_answer(value, self._current_question_code)
+                    if self._next_question():
+                        question = self._poll._questions_dict[self._current_question_code]
+
+                        if question.code == skip_to_code:
+                            return AddAnswerResult.ADDED
+
+                        depends_on = question.depends_on
+                        assert question.default_value  # should never happen because of config validation
+                        if depends_on:
+                            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
+                            value = question._type.deserialize_value(
+                                serialized=question.default_value, dep_value=dep_value, user=self._user
+                            )
+                        else:
+                            value = question._type.deserialize_value(serialized=question.default_value)
+                    else:
+                        return AddAnswerResult.COMPLETED
+
+        self._add_answer(value, self._current_question_code)
+        if self._next_question():
+            return AddAnswerResult.ADDED
+        else:
+            return AddAnswerResult.COMPLETED
+
+    def add_default(self) -> AddAnswerResult:
+        if self.delayed_until is not None:
+            if datetime.datetime.now() < self.delayed_until:
+                return AddAnswerResult.DELAY
+            else:
+                self._delayed_at = None
+
+        question = self._poll._questions_dict[self._current_question_code]
+        value = None
+        depends_on = question.depends_on
+
+        if question.default_value is None:
+            return AddAnswerResult.ERROR
+
+        if depends_on:
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
+            value = question._type.deserialize_value(
+                serialized=question.default_value, dep_value=dep_value, user=self._user
+            )
+        else:
+            value = question._type.deserialize_value(serialized=question.default_value)
+
         self._add_answer(value, self._current_question_code)
         if self._next_question():
             return AddAnswerResult.ADDED
@@ -251,12 +304,15 @@ class PollWorkflow:
             current_question_value_hint=self.current_question._type.value_hint,
             current_question_allow_manual_answer=self.current_question._type.allows_manual,
             current_question_select_list=self.current_question_select_list,
+            current_question_default_value=self.current_question.default_value,
             questions=[q.display_name for q in self.questions if q.ephemeral is False],
             answers=[a.label for a in self.answers],
         )
 
     @classmethod
-    def from_store_data(cls, poll: Poll, user: User, log_id: int, poll_ts: datetime.datetime, log: str) -> PollWorkflow:
+    def from_store_data(
+        cls, poll: Poll, user: User, poll_ts: datetime.datetime, log: str, log_id: int | None = None
+    ) -> PollWorkflow:
         answers_raw: Dict[str, ValueLabel] = {}
 
         if log:
