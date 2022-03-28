@@ -5,13 +5,12 @@ services:
       context: ./../
       args:
         extras: server
-      dockerfile: ./docker/Dockerfile-dev
+      dockerfile: ./docker/Dockerfile
     tty: true
     container_name: nerddiary-server
-    command: nerddiary --log-level DEBUG --log-file /app/log/server.log server -p 80 -r
+    command: nerddiary --log-file /app/log/server.log server -p 80
     volumes:
       - ./../devplayground/:/app/log
       - ./../devplayground/:/app/data
-      - ./../nerddiary:/app/nerddiary
     ports:
       - 8880:80

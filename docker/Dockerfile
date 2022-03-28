@@ -6,9 +6,6 @@ WORKDIR /app
 
 RUN mkdir data
 
-COPY pyproject.toml .env README.md ./
-COPY nerddiary/ nerddiary/
+COPY .env ./
 
-RUN python -m pip install poetry \
-    && poetry config virtualenvs.create false --local \
-    && poetry install -E ${extras}
+RUN python -m pip install nerddiary[server]==0.2.0a0

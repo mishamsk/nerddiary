@@ -16,7 +16,6 @@ Reporting:
     ☐ Clean module for graphs @low
     ☐ Add strava as training source
 Infrastructure:
-    ☐ Configure prod docker @today
     ☐ Backup user conf & data @high
     ☐ Add black flake to git action @low
     ☐ [Configure codecov](https://app.codecov.io/gh) @low
@@ -37,6 +36,7 @@ Documentation:
     ☐ Documentation[autodoc-pydantic](https://pypi.org/project/autodoc-pydantic/)
 
 Archive:
+  ✔ Configure prod docker @today @done(22-03-28 00:15) @project(Infrastructure)
   ✔ Closing with active polls results in serialization error @high @done(22-03-27 22:00) @project(Bugs)
     TypeError: Object of type 'US/Eastern' is not JSON serializable
   ✔ Do not remind if once_per_day_poll was already asked today @low @done(22-03-27 21:57) @project(Features)
