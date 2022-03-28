@@ -1,0 +1,92 @@
+[tool.poetry]
+name = "nerddiary"
+version = "0.1.0"
+description = "A collection of tools to capture a personal log / diary and analyze these records"
+authors = ["mishamsk <mishamsk@gmail.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://nerddiary.app"
+repository = "https://github.com/mishamsk/nerddiary"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Communications :: Chat",
+    "Topic :: Office/Business :: News/Diary",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Stubs Only",
+    'Natural Language :: Russian'
+]
+packages = [
+    { include = "nerddiary" }
+]
+exclude = ["nerddiary/**/test/", "nerddiary/**/conftest.py"]
+
+[tool.poetry.dependencies]
+arrow = "^1.2.2"
+pydantic = {extras = ["dotenv"], version = "^1.9.0"}
+python = "^3.10"
+pytz = "^2022.1"
+websockets = "^10.1"
+jsonrpcclient = { version =  "^4.0.2", optional = true }
+jsonrpcserver = { version =  "^5.0.6", optional = true }
+click = { version = "^8.0.3", optional = true }
+SQLAlchemy = { version = "^1.4.29", optional = true }
+cryptography = { version = "^36.0.1", optional = true }
+APScheduler = { version = "^3.8.1", optional = true }
+uvicorn = { version = "^0.17.4", optional = true }
+fastapi = { version = "^0.73.0", optional = true }
+
+[tool.poetry.extras]
+full = ["jsonrpcclient", "jsonrpcserver", "click", "SQLAlchemy","cryptography","APScheduler","uvicorn","fastapi"]
+client = ["jsonrpcclient"]
+server = ["jsonrpcserver", "click", "SQLAlchemy", "cryptography", "APScheduler", "uvicorn", "fastapi"]
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.5"
+bump2version = "^1.0.1"
+coverage = {extras = ["toml"], version = "^6.2"}
+isort = "^5.10.1"
+pre-commit = "^2.17.0"
+pytest-asyncio = "^0.17.2"
+pytest-cov = "^3.0.0"
+ipython = "^8.1.1"
+
+[tool.poetry.scripts]
+nerddiary = 'nerddiary.cli:cli'
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--basetemp=testtemp -m 'not performance'"
+markers = "performance: mark a test as a performance test, skipped by default."
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = ["*/test/*", "**/conftest.py"]
+
+[tool.coverage.report]
+omit = ["*/test/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "def __repr__",
+    "if .*DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError"
+    ]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip_gitignore = true
+known_typing="typing"
+sections= ["FUTURE","STDLIB","FIRSTPARTY","THIRDPARTY","LOCALFOLDER","TYPING"]
+# skip files
+#skip_glob = docs/conf.py
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,3 +1,4 @@
+.DS_Store
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -112,6 +113,17 @@ ENV/
 # IDE settings
 .vscode/
 .idea/
+
+# Test stuff
 /testdata/*
 /data/*
 /testtemp/*
+
+# Dev playgroud
+/devplayground/*
+
+# Auto generated pip files
+/requirements*.txt
+
+# Telethon sessions
+*.session
