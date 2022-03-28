@@ -27,6 +27,7 @@ class AsyncApplication(abc.ABC):
         self._loop_started_by_self = False
         self._closed: asyncio.Future[bool] | None = None
         self._closing = False
+        self._started = False
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -40,6 +41,10 @@ class AsyncApplication(abc.ABC):
             self._loop_started_by_self = True
 
         return self._loop
+
+    @property
+    def started(self) -> bool:
+        return self._started
 
     @property
     def closed(self) -> bool:
@@ -73,7 +78,7 @@ class AsyncApplication(abc.ABC):
         return res
 
     @abc.abstractmethod
-    async def _astart(self):
+    async def _astart(self) -> bool:
         pass
 
     @abc.abstractmethod
@@ -95,6 +100,10 @@ class AsyncApplication(abc.ABC):
         self._logger.debug(
             "Running <_astart> method, ensuring <aclose> is executed if SIGINT is sent before <_astart> is finished"
         )
+
+        if self._started:
+            self._logger.debug("App is already started. Skipping")
+            return self
 
         if not self.closed:
             self._logger.error("The app hasn't been properly closed, thus it can't be restarted")
@@ -121,7 +130,7 @@ class AsyncApplication(abc.ABC):
 
             func_task = self.loop.create_task(self._astart())
 
-            await func_task
+            self._started = await func_task
         except asyncio.CancelledError:
             if hit_sigint:
                 self._logger.warn("Closing app after SIGINT")
@@ -137,6 +146,8 @@ class AsyncApplication(abc.ABC):
 
             if not res:
                 raise
+        except Exception:
+            self._logger.exception("Uncaught exception in <_astart> method")
         finally:
             if not hit_sigint:
                 self._logger.debug("Restoring SIGINT handler")
@@ -156,6 +167,7 @@ class AsyncApplication(abc.ABC):
             await self._closed
             return self.closed
         else:
+            self._closed = asyncio.Future()
             self._closing = True
 
         self._logger.debug("Running <_aclose> method, shielding it from SIGINT and cancellation")
@@ -181,6 +193,8 @@ class AsyncApplication(abc.ABC):
                 self._logger.debug("Restoring SIGINT handler and re-raising SIGINT")
                 signal.signal(signal.SIGINT, old_sigint_handler)
                 raise KeyboardInterrupt()
+        except asyncio.CancelledError:
+            self._logger.exception("Unhandled asyncio cancellation in <_aclose> method")
         except Exception:
             self._logger.exception("Uncaught exception in <_aclose> method")
         finally:
@@ -188,6 +202,7 @@ class AsyncApplication(abc.ABC):
                 self._logger.debug("Restoring SIGINT handler")
                 signal.signal(signal.SIGINT, old_sigint_handler)
 
+        self._started = False
         self._closing = False
         self._closed.set_result(res)
         return self.closed

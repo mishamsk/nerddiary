@@ -23,7 +23,7 @@ class TestUser:
                 "hours_over_midgnight": 2,
                 "questions": [
                     {
-                        "type": "relative_timestamp",
+                        "type": "timestamp",
                         "code": "start_time",
                         "display_name": "When did it start?",
                         "description": "Type in how many hours ago did it start aching"
@@ -123,7 +123,7 @@ class TestUser:
         assert u.id == "123ABCD"
         assert u.username is None
         assert u.lang_code == "en"
-        assert u.timezone is None
+        assert u.timezone is pytz.timezone("US/Eastern")
         assert not u.polls
         assert not u.reports
 
@@ -220,7 +220,7 @@ class TestUser:
                 "poll_name": "Headache",
                 "questions": [
                     {
-                        "type": "relative_timestamp",
+                        "type": "timestamp",
                         "code": "start_time",
                         "display_name": "When did it start?"
                     }
@@ -230,7 +230,7 @@ class TestUser:
                 "poll_name": "Headache",
                 "questions": [
                     {
-                        "type": "relative_timestamp",
+                        "type": "timestamp",
                         "code": "start_time",
                         "display_name": "When did it start?"
                     }
@@ -268,7 +268,7 @@ class TestUser:
                 "command": "head",
                 "questions": [
                     {
-                        "type": "relative_timestamp",
+                        "type": "timestamp",
                         "code": "start_time",
                         "display_name": "When did it start?"
                     }
@@ -279,7 +279,7 @@ class TestUser:
                 "command": "head",
                 "questions": [
                     {
-                        "type": "relative_timestamp",
+                        "type": "timestamp",
                         "code": "start_time",
                         "display_name": "When did it start?"
                     }

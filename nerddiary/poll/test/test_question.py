@@ -59,7 +59,7 @@ class TestQuestion:
         {
             "code":"q",
             "display_name": "not code",
-            "type": "timestamp"
+            "type": "auto_timestamp"
         }
         """
 

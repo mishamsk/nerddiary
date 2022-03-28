@@ -70,6 +70,7 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
         self._message_dispatcher = asyncio.create_task(self._message_dispatch())
 
         await self._sessions.init_sessions()
+        return True
 
     async def _aclose(self) -> bool:
 

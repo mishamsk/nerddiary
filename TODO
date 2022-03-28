@@ -1,21 +1,15 @@
 Bugs:
     ☐ Many session endpoints won't capture and log errors properly + jsonrpcserver logs to root... @today
-    ☐ Closing with active polls results in serialization error @high
-        TypeError: Object of type 'US/Eastern' is not JSON serializable
     ☐ Server doesn't remove disconnected clients? After reconnect, old client id was still in the list of exclusions for the broadcast
         2022-03-23 15:42:39,105 - DEBUG - nerddiary.server - _notification_dispatch - Starting broadcasting notification: type=<NotificationType.SERVER_CLIENT_CONNECTED: 101> data=client_id='43d2a290-902c-42b6-80d7-70df6d4ad271' source='43d2a290-902c-42b6-80d7-70df6d4ad271' exclude={'34515a95-119c-4a4b-9e8c-fd84b8a7efa6', '43d2a290-902c-42b6-80d7-70df6d4ad271'}
     ☐ When exception happens in API functions (like pollmixin module), session is not cleaning up properly (e.g. active workflow remains)
-    ☐ Client will strangly die on asyncio.exceptions.TimeoutError and hang on closing (to reroduce - enter debugging on the server)
 Features:
     ☐ Upload records command @high
-    ☐ Drop active polls on server close (remove serialization) @high
-    ☐ Do not remind if once_per_day_poll was already asked today @low
     ☐ Better handle server errors (currently message dispatcher will just stop of error and nothing happens)
     ☐ Change password feature
     ☐ Support for non int user ids (Currently data provider assumes id is a valid string to create a folder)
     ☐ Password enhancements (delete data if not recoverable)
     ☐ Add poll timeout on the server (check that poll is not delayed when cancelling)
-    ☐ Mixed select + manual value
     ☐ Allow skipping questions on particular answers (set default/automatic answer)
 Reporting:
     ☐ Code graphs in the playground @high
@@ -43,6 +37,12 @@ Documentation:
     ☐ Documentation[autodoc-pydantic](https://pypi.org/project/autodoc-pydantic/)
 
 Archive:
+  ✔ Closing with active polls results in serialization error @high @done(22-03-27 22:00) @project(Bugs)
+    TypeError: Object of type 'US/Eastern' is not JSON serializable
+  ✔ Do not remind if once_per_day_poll was already asked today @low @done(22-03-27 21:57) @project(Features)
+  ✔ Mixed select + manual value @done(22-03-27 21:58) @project(Features)
+  ✔ Client will strangly die on asyncio.exceptions.TimeoutError and hang on closing (to reroduce - enter debugging on the server) @done(22-03-27 18:10) @project(Bugs)
+  ✔ Drop active polls on server close (remove serialization) @high @done(22-03-27 18:17) @project(Features)
   ✔ Hide poll, config data from debug log @high @done(22-03-27 01:24) @project(Bugs)
   ✔ Deserialized poll_workflow returns raw values in answers instead of labels + historical logs also missing labels @high @done(22-03-27 01:24) @project(Bugs)
   ✔ Time only type @low @done(22-03-27 01:24) @project(Features)

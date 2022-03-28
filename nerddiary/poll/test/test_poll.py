@@ -70,6 +70,7 @@ class TestPoll:
         json = """
         {
             "poll_name":"tWo woRDs",
+            "once_per_day": "true",
             "questions": [
                 {
                     "code": "q1",
@@ -117,7 +118,7 @@ class TestPoll:
         assert p.description is None
         assert p.reminder_time is None
         assert p.once_per_day is True
-        assert p.hours_over_midgnight == 3
+        assert p.hours_over_midgnight is None
         assert len(p.questions) == 3
         assert p._questions_dict["q3"] == p.questions[2]
         assert p.questions[2]._order == 2

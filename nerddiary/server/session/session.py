@@ -8,11 +8,11 @@ import json
 import logging
 from uuid import UUID
 
+import arrow
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from pydantic import ValidationError
-from pydantic.json import pydantic_encoder
 
 from ...data.data import DataConnection, DataProvider, IncorrectPasswordKeyError
 from ...error.error import NerdDiaryError, NerdDiaryErrorCode
@@ -24,10 +24,6 @@ from .status import UserSessionStatus
 
 from typing import Any, Coroutine, Dict, Iterable, List, Set, Tuple
 
-# from datetime import datetime
-
-
-ACTIVE_POLL_DATA_CATEGORY = "ACTIVE_POLL"
 CONFIG_DATA_CATEGORY = "CONFIG"
 
 
@@ -82,7 +78,7 @@ class UserSession:
                                     hour=poll.reminder_time.hour,
                                     minute=poll.reminder_time.minute,
                                     second=poll.reminder_time.second,
-                                    timezone=poll.reminder_time.tzinfo,
+                                    timezone=self._user_config.timezone,
                                 ),
                                 args=(poll.poll_name,),
                                 max_instances=1,  # type: ignore
@@ -94,33 +90,6 @@ class UserSession:
                 new_status = UserSessionStatus.CONFIGURED
             except ValidationError:
                 raise NerdDiaryError(NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR, ext_message=CONFIG_DATA_CATEGORY)
-
-        if self._session_spawner._data_provoider.check_user_data_exist(
-            self.user_id, category=ACTIVE_POLL_DATA_CATEGORY
-        ):
-            try:
-                raw_data = self._data_connection.get_user_data(category=ACTIVE_POLL_DATA_CATEGORY)
-                assert raw_data
-                active_polls: Dict[str, Any] = json.loads(raw_data)
-
-                self._active_polls = {UUID(i): PollWorkflow.from_dict(v) for i, v in active_polls.items()}
-
-                for active_poll in self._active_polls.values():
-                    if active_poll.delayed_until:
-                        self._session_spawner._scheduler.add_job(
-                            func=self._session_spawner.notify,
-                            trigger=DateTrigger(run_date=active_poll.delayed_until),
-                            args=(
-                                NotificationType.SERVER_POLL_DELAY_PASSED,
-                                active_poll.to_schema(),
-                            ),
-                            max_instances=1,  # type: ignore
-                            coalesce=True,  # type: ignore
-                            misfire_grace_time=10,  # type: ignore
-                            name=f"{active_poll.poll_run_id}/{active_poll.current_question_code}",
-                        )
-            except ValidationError:
-                raise NerdDiaryError(NerdDiaryErrorCode.SESSION_DATA_PARSE_ERROR, ext_message=ACTIVE_POLL_DATA_CATEGORY)
 
         await self._set_status(new_status=new_status)
 
@@ -165,6 +134,7 @@ class UserSession:
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
                 log_id, last_poll_name, last_poll_ts, log = logs[0]
+                last_poll_ts = arrow.get(last_poll_ts).to(self._user_config.timezone).datetime
 
                 if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
                     hour=0, minute=0, second=0, microsecond=0
@@ -196,6 +166,7 @@ class UserSession:
             logs = self._data_connection.get_last_n_logs(poll_code=poll.poll_name, count=1)
             if logs:
                 log_id, last_poll_name, last_poll_ts, log = logs[0]
+                last_poll_ts = arrow.get(last_poll_ts).to(self._user_config.timezone).datetime
 
                 if last_poll_ts.replace(hour=0, minute=0, second=0, microsecond=0) == compare_ts.replace(
                     hour=0, minute=0, second=0, microsecond=0
@@ -272,7 +243,7 @@ class UserSession:
         return workflow
 
     async def close_poll(self, poll_run_id: str, save: bool):
-        workflow = self._active_polls.get(UUID(poll_run_id))
+        workflow = self._active_polls.pop(UUID(poll_run_id))
         if workflow is None:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
@@ -288,7 +259,7 @@ class UserSession:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_POLL_RUN_ID_NOT_FOUND, str(UUID(poll_run_id)))
 
         self._active_polls[workflow.poll_run_id] = new_workflow = PollWorkflow(
-            poll=workflow._poll, user=workflow._user, poll_run_id=poll_run_id
+            poll=workflow._poll, user=workflow._user, poll_run_id=workflow.poll_run_id
         )
 
         return new_workflow
@@ -309,7 +280,12 @@ class UserSession:
             logs = self._data_connection.get_all_logs()
 
         for id, poll_name, poll_ts, data in logs:
-            log = PollLogSchema(id=id, poll_name=poll_name, poll_ts=poll_ts, data=json.loads(data))
+            log = PollLogSchema(
+                id=id,
+                poll_name=poll_name,
+                poll_ts=arrow.get(poll_ts).to(self._user_config.timezone).datetime,
+                data=json.loads(data),
+            )
             ret.logs.append(log)
 
         return ret
@@ -333,7 +309,7 @@ class UserSession:
             poll=poll,
             user=self._user_config,
             log_id=id,
-            poll_ts=poll_ts,
+            poll_ts=arrow.get(poll_ts).to(self._user_config.timezone).datetime,
             log=data,
         )
         self._active_polls[workflow.poll_run_id] = workflow
@@ -394,6 +370,27 @@ class UserSession:
 
         try:
             self._user_config = User.parse_raw(config)
+            if self._user_config.polls:
+                for job in self._session_spawner._scheduler.get_jobs():
+                    if job.name.startswith(f"{self._user_config.id}"):
+                        job.remove()
+                for poll in self._user_config.polls:
+                    if poll.reminder_time:
+                        job = self._session_spawner._scheduler.add_job(
+                            func=self.check_and_notify,
+                            trigger=CronTrigger(
+                                day_of_week=",".join(map(str, tuple(range(7)))),
+                                hour=poll.reminder_time.hour,
+                                minute=poll.reminder_time.minute,
+                                second=poll.reminder_time.second,
+                                timezone=self._user_config.timezone,
+                            ),
+                            args=(poll.poll_name,),
+                            max_instances=1,  # type: ignore
+                            coalesce=True,  # type: ignore
+                            misfire_grace_time=10,  # type: ignore
+                            name=f"{self._user_config.id}/{poll.poll_name}",
+                        )
             await self._set_status(new_status=UserSessionStatus.CONFIGURED)
         except ValidationError:
             raise NerdDiaryError(NerdDiaryErrorCode.SESSION_INVALID_USER_CONFIGURATION)
@@ -417,11 +414,6 @@ class UserSession:
             if self._user_config:
                 self._data_connection.store_user_data(
                     self._user_config.json(exclude_unset=True, ensure_ascii=False), category=CONFIG_DATA_CATEGORY
-                )
-            if self._active_polls:
-                self._data_connection.store_user_data(
-                    json.dumps({str(i): v.to_dict() for i, v in self._active_polls.items()}, default=pydantic_encoder),
-                    category=ACTIVE_POLL_DATA_CATEGORY,
                 )
 
 

@@ -69,28 +69,34 @@ class NerdDiaryClient(AsyncApplication):
 
         return decorator
 
-    async def _astart(self):
+    async def _astart(self) -> bool:
         self._logger.debug("Starting NerdDiary client")
         self._running = True
         if await self._connect():
             self._message_dispatcher = asyncio.create_task(self._message_dispatch())
+            return True
         else:
-            raise RuntimeError("Couldn't connect to NerdDiary Server")
+            self._logger.warning("Couldn't connect to NerdDiary Server")
+            return False
 
     async def _aclose(self) -> bool:
 
         self._logger.debug("Closing NerdDiary client")
+
+        # Disconnect websocket first, this will allow handling client_on_disconnect notification and send the last message to the server (if connected)
+        self._logger.debug("Disconnecting websocket")
+        await self._disconnect()
+
         if self._running:
+            self._logger.debug("Stopping internal loops")
             # Stop any internal loops
             self._stop()
-
-        # Disconnect websocket
-        await self._disconnect()
 
         # If rpc dispatcher exist, wait for it to stop
         if self._message_dispatcher and not self._message_dispatcher.done() and self._message_dispatcher.cancel():
             self._logger.debug("Waiting for message dispatcher to gracefully finish")
-            await self._message_dispatcher
+            with suppress(asyncio.CancelledError):
+                await self._message_dispatcher
 
         # Cancel pending rpc_calls
         self._logger.debug(f"Cancelling pending RPC calls (result awaits). Total count: {len(self._rpc_calls)}")
@@ -150,8 +156,8 @@ class NerdDiaryClient(AsyncApplication):
                 # failed to reconnect in time and the client is still running
                 err = f"Failed to connect to NerdDiary server after {retry * self._config.reconnect_timeout} seconds (over {retry} retries). Closing client"
                 self._logger.error(err)
-                await self.aclose()
                 await self._process_notification(NotificationType.CLIENT_CONNECT_FAILED)
+                await asyncio.shield(self.aclose())
                 return False
 
             await self._process_notification(NotificationType.CLIENT_ON_CONNECT)
@@ -161,7 +167,7 @@ class NerdDiaryClient(AsyncApplication):
             return True
 
     async def _disconnect(self):
-        if self._ws is not None:
+        if self._ws is not None and self._ws.open:
             self._logger.debug(f"Disconnecting from NerdDiary server at <{self._config.server_uri}>")
             await self._process_notification(NotificationType.CLIENT_BEFORE_DISCONNECT)
             await self._ws.close()
@@ -175,7 +181,7 @@ class NerdDiaryClient(AsyncApplication):
         req = request_uuid(method=method, params=params)
         id = req["id"]
         self._logger.debug(
-            f"Executing RPC call on NerdDiary server. Method <{method}> with params <{mask_sensitive(str(params))}>. Assigned JSON RPC id: {str(id)}"
+            f"Executing RPC call on NerdDiary server. Method <{method}> with <{mask_sensitive('params ' + str(params))}>. Assigned JSON RPC id: {str(id)}"
         )
         self._rpc_calls[id] = AsyncRPCResult(id=id)
 
@@ -185,9 +191,15 @@ class NerdDiaryClient(AsyncApplication):
                 await self._ws.send(json.dumps(req))
                 has_sent = True
             except ConnectionClosedOK:
+                self._logger.debug("Server disconnected normally")
                 if not await self._connect():
                     return
             except ConnectionClosedError:
+                self._logger.debug("Server disconnected with an error")
+                if not await self._connect():
+                    return
+            except TimeoutError:
+                self._logger.debug("Timeout while waiting for server send")
                 if not await self._connect():
                     return
             except Exception:
@@ -197,13 +209,13 @@ class NerdDiaryClient(AsyncApplication):
 
         try:
             self._logger.debug(
-                f"Waiting for RPC call result. Method <{method}> with params <{mask_sensitive(str(params))}>. Assigned JSON RPC id: {str(id)}"
+                f"Waiting for RPC call result. Method <{method}> with <{mask_sensitive('params ' + str(params))}>. Assigned JSON RPC id: {str(id)}"
             )
             res = await self._rpc_calls[id].get(timeout=self._config.rpc_call_timeout)
             self._logger.debug(f"RPC call result {mask_sensitive(str(res))}")
             return res
         except asyncio.CancelledError:
-            pass
+            self._logger.debug("Message dispatcher task cancelled")
         except NerdDiaryError:
             raise
         except Exception:
@@ -267,12 +279,19 @@ class NerdDiaryClient(AsyncApplication):
                                 NerdDiaryError(NerdDiaryErrorCode(code), message, data)
                             )
             except ConnectionClosedOK:
+                self._logger.debug("Server disconnected normally")
                 if not await self._connect():
-                    return
+                    break
             except ConnectionClosedError:
+                self._logger.debug("Server disconnected with an error")
                 if not await self._connect():
-                    return
+                    break
+            except TimeoutError:
+                self._logger.debug("Timeout while waiting for server response")
+                if not await self._connect():
+                    break
             except asyncio.CancelledError:
+                self._logger.debug("Message dispatcher task cancelled")
                 break
             except Exception:
                 err = "Unexpected exception during message dispatching."

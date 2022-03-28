@@ -5,6 +5,7 @@ import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import arrow
 import sqlalchemy as sa
 from cryptography.fernet import InvalidToken
 from pydantic import BaseModel, DirectoryPath, ValidationError
@@ -349,10 +350,10 @@ class SQLLiteConnection(DataConnection):
             meta,
             sa.Column("id", sa.Integer, primary_key=True, index=True, nullable=False),
             sa.Column("poll_code", sa.String, index=True, unique=False, nullable=False),
-            sa.Column("poll_ts", sa.DATETIME, index=True, unique=False, nullable=False),
+            sa.Column("poll_ts", sa.TIMESTAMP(timezone=True), index=True, unique=False, nullable=False),
             sa.Column("log", BLOB, nullable=False),
-            sa.Column("created_ts", sa.DATETIME, nullable=False),
-            sa.Column("updated_ts", sa.DATETIME, nullable=False),
+            sa.Column("created_ts", sa.TIMESTAMP(timezone=True), nullable=False),
+            sa.Column("updated_ts", sa.TIMESTAMP(timezone=True), nullable=False),
         )
 
         self._user_data_table = user_data_table = sa.Table(
@@ -360,8 +361,8 @@ class SQLLiteConnection(DataConnection):
             meta,
             sa.Column("category", sa.String, primary_key=True, index=True, unique=True, nullable=False),
             sa.Column("data", BLOB, nullable=False),
-            sa.Column("created_ts", sa.DATETIME, nullable=False),
-            sa.Column("updated_ts", sa.DATETIME, nullable=False),
+            sa.Column("created_ts", sa.TIMESTAMP(timezone=True), nullable=False),
+            sa.Column("updated_ts", sa.TIMESTAMP(timezone=True), nullable=False),
         )
 
         with engine.connect() as conn:
@@ -369,7 +370,7 @@ class SQLLiteConnection(DataConnection):
             user_data_table.create(conn, checkfirst=True)
 
     def store_user_data(self, data: str, category: str) -> bool:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
 
         stmt = self._user_data_table.select().where(self._user_data_table.c.category == category)
         new = True
@@ -423,7 +424,7 @@ class SQLLiteConnection(DataConnection):
                 return None
 
     def append_log(self, poll_code: str, poll_ts: datetime.datetime, log: str) -> int | None:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
 
         log_out = self._encryption_provider.encrypt(log.encode())
 
@@ -431,7 +432,7 @@ class SQLLiteConnection(DataConnection):
             values={
                 "log": log_out,
                 "poll_code": poll_code,
-                "poll_ts": poll_ts,
+                "poll_ts": arrow.get(poll_ts).to("utc").datetime,
                 "created_ts": now,
                 "updated_ts": now,
             }
@@ -472,14 +473,14 @@ class SQLLiteConnection(DataConnection):
         return self._query_and_decrypt(stmt)
 
     def update_log(self, id: Any, poll_ts: datetime.datetime | None = None, log: str | None = None) -> bool:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
 
         stmt = self._poll_log_table.update().where(self._poll_log_table.c.id == id).values(updated_ts=now)
         if log is not None:
             log_out = self._encryption_provider.encrypt(log.encode())
             stmt = stmt.values(log=log_out)
         if poll_ts is not None:
-            stmt = stmt.values(poll_ts=poll_ts)
+            stmt = stmt.values(poll_ts=arrow.get(poll_ts).to("utc").datetime)
 
         with self._engine.connect() as conn:
             result = conn.execute(stmt)
@@ -506,10 +507,10 @@ class SQLLiteConnection(DataConnection):
             stmt = stmt.where(self._poll_log_table.c.poll_code == poll_code)
 
         if date_from:
-            stmt = stmt.where(self._poll_log_table.c.poll_ts >= date_from)
+            stmt = stmt.where(self._poll_log_table.c.poll_ts >= arrow.get(date_from).to("utc").datetime)
 
         if date_to:
-            stmt = stmt.where(self._poll_log_table.c.poll_ts <= date_to)
+            stmt = stmt.where(self._poll_log_table.c.poll_ts <= arrow.get(date_to).to("utc").datetime)
 
         if max_rows:
             stmt = stmt.limit(max_rows + skip)

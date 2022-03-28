@@ -59,7 +59,7 @@ def mockpoll():
         "hours_over_midgnight": 2,
         "questions": [
             {
-                "type": "relative_timestamp",
+                "type": "timestamp",
                 "code": "start_time",
                 "display_name": "When did it start?",
                 "description": "Type in how many hours ago did it start aching"

@@ -41,7 +41,7 @@ class Poll(BaseModel):
     """ Whether this poll can only be asked once a day """
 
     hours_over_midgnight: Optional[int] = Field(
-        default=3,
+        default=None,
         ge=0,
         le=7,
         description="For once per day polls - if poll is started before `hours_over_midgnight`AM set it to previous day 11:59:59PM",

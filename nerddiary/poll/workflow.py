@@ -30,13 +30,16 @@ class PollWorkflow:
         self,
         poll: Poll,
         user: User,
-        poll_run_id: UUID | str | int | bytes = uuid4(),
+        poll_run_id: UUID | str | int | bytes | None = None,
         log_id: int | None = None,
         answers_raw: Dict[str, ValueLabel] | None = None,
         current_question_code: str | None = None,
         poll_ts: datetime.datetime | None = None,
         delayed_at: datetime.datetime | None = None,
     ) -> None:
+
+        if poll_run_id is None:
+            poll_run_id = uuid4()
 
         if not isinstance(poll_run_id, UUID):
             if isinstance(poll_run_id, int):

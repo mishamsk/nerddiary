@@ -1,5 +1,3 @@
-from datetime import datetime, timedelta
-
 from nerddiary.poll.type import (
     AuroTimestampType,
     DependantSelectType,
@@ -10,6 +8,7 @@ from nerddiary.poll.type import (
 )
 from nerddiary.primitive.valuelabel import ValueLabel
 
+import arrow
 import pytest
 import pytz
 from pydantic import ValidationError
@@ -18,6 +17,7 @@ from pydantic import ValidationError
 class Mockuser:
     def __init__(self) -> None:
         self.timezone = pytz.timezone("US/Eastern")
+        self.lang_code = "en"
 
 
 class TestQuestionType:
@@ -241,10 +241,10 @@ class TestTimestampType:
 
         time = AuroTimestampType()
 
-        assert time.type == "timestamp"
+        assert time.type == "auto_timestamp"
         assert time.is_auto is True
         assert time.is_dependent is False
-        assert time.get_possible_values() == datetime
+        assert time.get_possible_values() == arrow.Arrow
 
         with pytest.raises(NotImplementedError) as err:
             time.get_value_from_answer("answer")
@@ -262,8 +262,8 @@ class TestTimestampType:
 
         tz = mockuser.timezone
 
-        now_unaware = datetime.now().replace(microsecond=0)
-        now_aware = datetime.now(tz).replace(microsecond=0)
+        now_unaware = arrow.now().replace(microsecond=0)
+        now_aware = arrow.now(tz).replace(microsecond=0)
         assert time.get_auto_value().value.replace(microsecond=0) == now_unaware
         assert time.get_auto_value(user=mockuser).value.replace(microsecond=0) == now_aware  # type:ignore
 
@@ -277,10 +277,10 @@ class TestRelativeTimestampType:
 
         time = TimestampType()
 
-        assert time.type == "relative_timestamp"
+        assert time.type == "timestamp"
         assert time.is_auto is False
         assert time.is_dependent is False
-        assert time.get_possible_values() == datetime
+        assert time.get_possible_values() == arrow.Arrow
 
         # Checking value conversion
         mockuser = Mockuser()
@@ -288,49 +288,18 @@ class TestRelativeTimestampType:
         tz = mockuser.timezone
 
         # Unsupported value
-        with pytest.raises(UnsupportedAnswerError) as err:
-            time.get_value_from_answer("answer")
-        assert err.type == UnsupportedAnswerError
+        assert time.get_value_from_answer("answer") is None
 
         # Testing various time delta format parsing
-        now_aware = datetime.now(tz).replace(microsecond=0)
-        assert time.get_value_from_answer("1", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(  # type: ignore
-            hours=1
+        now_aware = arrow.now(tz).replace(microsecond=0)
+        assert time.get_value_from_answer("an hour ago", user=mockuser).value.replace(microsecond=0) == now_aware.shift(  # type: ignore
+            hours=-1
         )
 
-        assert time.get_value_from_answer("1:12", user=mockuser).value.replace(microsecond=0) == now_aware - timedelta(  # type: ignore
-            hours=1, minutes=12
-        )
-
-        assert time.get_value_from_answer("1 день", user=mockuser).value.replace(  # type: ignore
+        assert time.get_value_from_answer("a day ago", user=mockuser).value.replace(  # type: ignore
             microsecond=0
-        ) == now_aware - timedelta(days=1)
-
-        assert time.get_value_from_answer("1 день, 2:12:31", user=mockuser).value.replace(  # type: ignore
-            microsecond=0
-        ) == now_aware - timedelta(days=1, hours=2, minutes=12, seconds=31)
-
-        assert time.get_value_from_answer("-1", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(  # type: ignore
-            hours=1
-        )
-
-        assert time.get_value_from_answer("-1:12", user=mockuser).value.replace(microsecond=0) == now_aware + timedelta(  # type: ignore
-            hours=1, minutes=12
-        )
-
-        assert time.get_value_from_answer("-1 день", user=mockuser).value.replace(  # type: ignore
-            microsecond=0
-        ) == now_aware + timedelta(days=1)
-
-        assert time.get_value_from_answer("-1 день, 2:12:31", user=mockuser).value.replace(  # type: ignore
-            microsecond=0
-        ) == now_aware + timedelta(days=1, hours=2, minutes=12, seconds=31)
-
-        # And one test with unaware
-        now_unaware = datetime.now().replace(microsecond=0)
-
-        assert time.get_value_from_answer("1 день, 2:12:31").value.replace(microsecond=0) == now_unaware - timedelta(
-            days=1, hours=2, minutes=12, seconds=31
+        ) == now_aware.shift(  # type: ignore
+            days=-1
         )
 
         # Other methods

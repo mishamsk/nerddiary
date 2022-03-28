@@ -263,7 +263,7 @@ class AuroTimestampType(QuestionType):
         self, dep_value: ValueLabel | None = None, user: User | None = None
     ) -> ValueLabel[arrow.Arrow] | None:
 
-        now = arrow.now(user.timezone)
+        now = arrow.now(user.timezone if user else None)
 
         return ValueLabel[arrow.Arrow](
             value=now,
@@ -310,7 +310,9 @@ class TimestampType(QuestionType):
 
         if time is None:
             try:
-                time = arrow.now(user.timezone if user else None).dehumanize(answer)
+                time = arrow.now(user.timezone if user else None).dehumanize(
+                    answer, locale=user.lang_code if user else "en"
+                )
             except ValueError:
                 pass
 
