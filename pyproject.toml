@@ -42,7 +42,7 @@ client = ["jsonrpcclient"]
 server = ["jsonrpcserver", "click", "SQLAlchemy", "cryptography", "APScheduler", "uvicorn", "fastapi"]
 
 [tool.poetry.dev-dependencies]
-pytest = "^6.2.5"
+pytest = "^7.1.1"
 bump2version = "^1.0.1"
 coverage = {extras = ["toml"], version = "^6.2"}
 isort = "^5.10.1"
