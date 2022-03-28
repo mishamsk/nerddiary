@@ -220,7 +220,7 @@ python-versions = "*"
 
 [[package]]
 name = "fastapi"
-version = "0.73.0"
+version = "0.75.0"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 category = "main"
 optional = true
@@ -892,7 +892,7 @@ server = ["jsonrpcserver", "click", "SQLAlchemy", "cryptography", "APScheduler",
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "d3064e51f590eeadc06b49b1f3369dcd7b998f14a47a69969cbee43ab1d8dd4b"
+content-hash = "56502a9f725f66c205d39203f4fe26b968c83cf6b91ad535bce0c288fb39ea65"
 
 [metadata.files]
 anyio = [
@@ -1077,8 +1077,8 @@ executing = [
     {file = "executing-0.8.3.tar.gz", hash = "sha256:c6554e21c6b060590a6d3be4b82fb78f8f0194d809de5ea7df1c093763311501"},
 ]
 fastapi = [
-    {file = "fastapi-0.73.0-py3-none-any.whl", hash = "sha256:f0a618aff5f6942862f2d3f20f39b1c037e33314d1b8207fd1c3a2cca76dfd8c"},
-    {file = "fastapi-0.73.0.tar.gz", hash = "sha256:dcfee92a7f9a72b5d4b7ca364bd2b009f8fc10d95ed5769be20e94f39f7e5a15"},
+    {file = "fastapi-0.75.0-py3-none-any.whl", hash = "sha256:43d12891b78fc497a50623e9c7c24640c569489f060acd9ce2c4902080487a93"},
+    {file = "fastapi-0.75.0.tar.gz", hash = "sha256:124774ce4cb3322841965f559669b233a0b8d343ea24fdd8b293253c077220d7"},
 ]
 filelock = [
     {file = "filelock-3.6.0-py3-none-any.whl", hash = "sha256:f8314284bfffbdcfa0ff3d7992b023d4c628ced6feb957351d4c48d059f56bc0"},
