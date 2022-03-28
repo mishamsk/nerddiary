@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nerddiary"
-version = "0.1.0"
+version = "0.2.0alpha"
 description = "A collection of tools to capture a personal log / diary and analyze these records"
 authors = ["mishamsk <mishamsk@gmail.com>"]
 license = "Apache-2.0"
