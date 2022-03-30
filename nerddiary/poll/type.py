@@ -267,7 +267,7 @@ class AuroTimestampType(QuestionType):
 
         return ValueLabel[arrow.Arrow](
             value=now,
-            label="⏰ " + now.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
+            label="⏰ " + now.format("DD MMM, YYYY HH:mm", locale=user.lang_code if user else "en"),
         )
 
     def serialize_value(self, value: ValueLabel[arrow.Arrow]) -> str:
@@ -280,7 +280,7 @@ class AuroTimestampType(QuestionType):
 
         return ValueLabel[arrow.Arrow](
             value=time,
-            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
+            label="⏰ " + time.format("DD MMM, YYYY HH:mm", locale=user.lang_code if user else "en"),
         )
 
 
@@ -321,7 +321,7 @@ class TimestampType(QuestionType):
 
         return ValueLabel[arrow.Arrow](
             value=time,
-            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
+            label="⏰ " + time.format("DD MMM, YYYY HH:mm", locale=user.lang_code if user else "en"),
         )
 
     @property
@@ -346,7 +346,7 @@ class TimestampType(QuestionType):
 
         return ValueLabel[arrow.Arrow](
             value=time,
-            label="⏰ " + time.format("DD MMM, YYYY HH:MM", locale=user.lang_code if user else "en"),
+            label="⏰ " + time.format("DD MMM, YYYY HH:mm", locale=user.lang_code if user else "en"),
         )
 
 
