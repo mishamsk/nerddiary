@@ -1,16 +1,14 @@
 Bugs:
-    ☐ Many session endpoints won't capture and log errors properly + jsonrpcserver logs to root... @today
+    ☐ Many session endpoints won't capture and log errors properly + jsonrpcserver logs to root... @low
     ☐ Server doesn't remove disconnected clients? After reconnect, old client id was still in the list of exclusions for the broadcast
         2022-03-23 15:42:39,105 - DEBUG - nerddiary.server - _notification_dispatch - Starting broadcasting notification: type=<NotificationType.SERVER_CLIENT_CONNECTED: 101> data=client_id='43d2a290-902c-42b6-80d7-70df6d4ad271' source='43d2a290-902c-42b6-80d7-70df6d4ad271' exclude={'34515a95-119c-4a4b-9e8c-fd84b8a7efa6', '43d2a290-902c-42b6-80d7-70df6d4ad271'}
     ☐ When exception happens in API functions (like pollmixin module), session is not cleaning up properly (e.g. active workflow remains)
 Features:
-    ☐ Upload records command @high
     ☐ Better handle server errors (currently message dispatcher will just stop of error and nothing happens)
     ☐ Change password feature
     ☐ Support for non int user ids (Currently data provider assumes id is a valid string to create a folder)
     ☐ Password enhancements (delete data if not recoverable)
     ☐ Add poll timeout on the server (check that poll is not delayed when cancelling)
-    ☐ Allow skipping questions on particular answers (set default/automatic answer)
 Reporting:
     ☐ Code graphs in the playground @high
     ☐ Clean module for graphs @low
@@ -19,8 +17,6 @@ Infrastructure:
     ☐ Backup user conf & data @high
     ☐ Add black flake to git action @low
     ☐ [Configure codecov](https://app.codecov.io/gh) @low
-    ☐ Move todo to github project @low
-    ☐ Setup code scanning in git
 Optimization:
     ☐ Change pydantic models to construct (no validation) where applicable
         ☐ or further - change to attrs+cattrs
@@ -36,6 +32,14 @@ Documentation:
     ☐ Documentation[autodoc-pydantic](https://pypi.org/project/autodoc-pydantic/)
 
 Archive:
+  ✘ Move todo to github project @low @cancelled(22-03-31 22:35) @project(Infrastructure)
+  ✔ Setup code scanning in git @done(22-03-28 01:09) @project(Infrastructure)
+  ✔ Config fron set_config still leaks to debug logs @today @done(22-03-31 22:34) @project(Bugs)
+  ✔ Last question gets skipped @today @done(22-03-31 22:33) @project(Bugs)
+  ✔ Relative timestamp calculation acts weirdly around the beginning of an hour (actually probably always sets the minute to 03) @high @done(22-03-31 22:33) @project(Bugs)
+  ✔ Upload records api endpoint @high @done(22-03-31 22:33) @project(Features)
+  ✔ Add int, float & text types @today @done(22-03-31 22:33) @project(Features)
+  ✔ Allow skipping questions on particular answers (set default/automatic answer) @done(22-03-31 22:34) @project(Features)
   ✔ Configure prod docker @today @done(22-03-28 00:15) @project(Infrastructure)
   ✔ Closing with active polls results in serialization error @high @done(22-03-27 22:00) @project(Bugs)
     TypeError: Object of type 'US/Eastern' is not JSON serializable
