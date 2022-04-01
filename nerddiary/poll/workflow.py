@@ -6,14 +6,14 @@ import json
 from copy import deepcopy
 from uuid import UUID, uuid4
 
-from nerddiary.server.schema import PollWorkflowStateSchema
-
 from pydantic import ValidationError
 
 from ..error.error import NerdDiaryError, NerdDiaryErrorCode
 from ..primitive.valuelabel import ValueLabel
+from ..server.schema import PollWorkflowStateSchema
 from ..user.user import User
 from .poll import Poll, Question
+from .type import UnsupportedAnswerError
 
 from typing import Any, Dict, List, Tuple
 
@@ -54,8 +54,15 @@ class PollWorkflow:
 
         # deepcopy poll to prevent config reloads impacting ongoing polls
         self._poll = deepcopy(poll)
+
+        if answers_raw is not None and any(q_code not in self._poll._questions_dict for q_code in answers_raw):
+            raise ValueError("Invalid question code in answers_raw")
+
         self._answers_raw: Dict[str, ValueLabel] = answers_raw if answers_raw else {}
         self._user = user
+
+        if current_question_code is not None and current_question_code not in self._poll._questions_dict:
+            raise ValueError(f"Invalid question code: {current_question_code}")
         self._current_question_code: str = current_question_code or self._poll.questions[0].code
 
         if poll_ts is None:
@@ -73,6 +80,7 @@ class PollWorkflow:
             self._poll_ts = poll_ts
 
         self._delayed_at: datetime.datetime | None = delayed_at
+        self._completed = False
 
     @property
     def poll_run_id(self) -> UUID:
@@ -96,7 +104,7 @@ class PollWorkflow:
 
     @property
     def completed(self) -> bool:
-        return self._current_question_code == self._poll.questions[-1].code
+        return self._completed
 
     @property
     def delayed(self) -> bool:
@@ -150,10 +158,13 @@ class PollWorkflow:
         self._answers_raw[question_code] = val
 
     def _next_question(self) -> bool:
-        if self.completed:
+        old_q_code = self._current_question_code
+
+        if self._poll._questions_dict[old_q_code]._order == len(self._poll.questions) - 1:
+            self._completed = True
             return False
 
-        self._current_question_code = self._get_next_question(self._current_question_code).code
+        self._current_question_code = self._poll.questions[self._poll._questions_dict[old_q_code]._order + 1].code
         new_question = self._poll._questions_dict[self._current_question_code]
 
         if new_question._type.is_auto:
@@ -162,9 +173,6 @@ class PollWorkflow:
             return self._next_question()
 
         return True
-
-    def _get_next_question(self, current_question_code: str) -> Question:
-        return self._poll.questions[self._poll._questions_dict[current_question_code]._order + 1]
 
     def _process_auto_question(self) -> None:
         question = self._poll._questions_dict[self._current_question_code]
@@ -193,11 +201,14 @@ class PollWorkflow:
         value = None
         depends_on = question.depends_on
 
-        if depends_on:
-            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
-            value = question._type.get_value_from_answer(answer=answer, dep_value=dep_value, user=self._user)
-        else:
-            value = question._type.get_value_from_answer(answer=answer, user=self._user)
+        try:
+            if depends_on:
+                dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
+                value = question._type.get_value_from_answer(answer=answer, dep_value=dep_value, user=self._user)
+            else:
+                value = question._type.get_value_from_answer(answer=answer, user=self._user)
+        except UnsupportedAnswerError:
+            pass
 
         if not value:
             return AddAnswerResult.ERROR
