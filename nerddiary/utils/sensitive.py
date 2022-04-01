@@ -10,5 +10,5 @@ def mask_sensitive(inp: str) -> str:
     ret = re.sub(r"(?<=password=[\"'])[^\"']*", "***", ret)
     ret = re.sub(r"(?<=['\"]data['\"]:).*", "***", ret)
     ret = re.sub(r"(?<=[\"']params[\"']:).*", "***", ret)
-    ret = re.sub(r"(?<= params <).*", "***", ret)
+    ret = re.sub(r"(?<=params <).*", "***", ret)
     return ret
