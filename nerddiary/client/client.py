@@ -181,7 +181,7 @@ class NerdDiaryClient(AsyncApplication):
         req = request_uuid(method=method, params=params)
         id = req["id"]
         self._logger.debug(
-            f"Executing RPC call on NerdDiary server. Method <{method}> with <{mask_sensitive('params ' + str(params))}>. Assigned JSON RPC id: {str(id)}"
+            f"Executing RPC call on NerdDiary server. Method <{method}>. Assigned JSON RPC id: {str(id)}"
         )
         self._rpc_calls[id] = AsyncRPCResult(id=id)
 
@@ -208,9 +208,7 @@ class NerdDiaryClient(AsyncApplication):
                 raise RuntimeError(err)
 
         try:
-            self._logger.debug(
-                f"Waiting for RPC call result. Method <{method}> with <{mask_sensitive('params ' + str(params))}>. Assigned JSON RPC id: {str(id)}"
-            )
+            self._logger.debug(f"Waiting for RPC call result. Method <{method}>. Assigned JSON RPC id: {str(id)}")
             res = await self._rpc_calls[id].get(timeout=self._config.rpc_call_timeout)
             self._logger.debug(f"RPC call result {mask_sensitive(str(res))}")
             return res
@@ -238,6 +236,10 @@ class NerdDiaryClient(AsyncApplication):
 
             try:
                 raw_response = await self._ws.recv()
+                if isinstance(raw_response, bytes):
+                    # TODO Proper handling of bytes responses
+                    raw_response = raw_response.decode()
+
                 self._logger.debug(f"Recieved message <{mask_sensitive(str(raw_response))}>")
                 parsed_response = json.loads(raw_response)
 
