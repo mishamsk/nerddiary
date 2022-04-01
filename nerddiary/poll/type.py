@@ -408,3 +408,117 @@ class TimeType(QuestionType):
             value=time,
             label="⏰ " + time.isoformat(timespec="seconds"),
         )
+
+
+class TextType(QuestionType):
+    type = "text"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        self._auto = False
+        self._must_depend = False
+        # TODO: make translatable
+        self.value_hint = "Произвольный текст"
+
+    def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
+        return str
+
+    def get_value_from_answer(
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel | None:
+        return ValueLabel[str](
+            value=answer,
+            label=answer,
+        )
+
+    def serialize_value(self, value: ValueLabel[str]) -> str:
+        return value.value
+
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[str]:
+        return ValueLabel[str](
+            value=serialized,
+            label=serialized,
+        )
+
+
+class FloatType(QuestionType):
+    type = "float"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        self._auto = False
+        self._must_depend = False
+        # TODO: make translatable
+        self.value_hint = "Число с плавающей точкой"
+
+    def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
+        return float
+
+    def get_value_from_answer(
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel | None:
+        value = 0.0
+        try:
+            value = float(answer)
+        except ValueError:
+            raise UnsupportedAnswerError(f"Couldn't convert {answer=} to float")
+
+        return ValueLabel[float](
+            value=value,
+            label=answer,
+        )
+
+    def serialize_value(self, value: ValueLabel[str]) -> str:
+        return str(value.value)
+
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[float]:
+        return ValueLabel[float](
+            value=float(serialized),
+            label=serialized,
+        )
+
+
+class IntType(QuestionType):
+    type = "int"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        self._auto = False
+        self._must_depend = False
+        # TODO: make translatable
+        self.value_hint = "Любое целое число"
+
+    def get_possible_values(self) -> t.Type[t.Any] | t.List[t.Any]:
+        return int
+
+    def get_value_from_answer(
+        self, answer: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel | None:
+        value = 0
+        try:
+            value = int(answer)
+        except ValueError:
+            raise UnsupportedAnswerError(f"Couldn't convert {answer=} to int")
+
+        return ValueLabel[int](
+            value=value,
+            label=answer,
+        )
+
+    def serialize_value(self, value: ValueLabel[str]) -> str:
+        return str(value.value)
+
+    def deserialize_value(
+        self, serialized: str, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> ValueLabel[int]:
+        return ValueLabel[int](
+            value=int(serialized),
+            label=serialized,
+        )
