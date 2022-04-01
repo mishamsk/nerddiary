@@ -218,17 +218,29 @@ class NerdDiaryServer(AsyncApplication, SessionMixin, PollMixin):
             NotificationType.SERVER_CLIENT_DISCONNECTED, ClientSchema(client_id=client_id), source=client_id
         )
 
-    async def broadcast(self, message: str, exclude: Set[str] = set()):
-        for client_id, ws in self._actve_connections.items():
-            self._logger.debug(f"Got {client_id=}. Checking if it is among {exclude=}")
-            if client_id not in exclude:
-                self._logger.debug(f"Sending {client_id=} message={mask_sensitive(message)}")
-                await ws.send_text(message)
+    async def broadcast(self, message: str | bytes, exclude: Set[str] = set()):
+        self._logger.debug(
+            f"Broadcasting message={mask_sensitive(message if isinstance(message, str) else message.decode())} to all clients except {exclude=}"
+        )
 
-    async def send_personal_message(self, client_id: str, message: str):
+        for client_id, ws in self._actve_connections.items():
+            if client_id not in exclude:
+                self._logger.debug(f"Sending tp {client_id=}")
+                if isinstance(message, str):
+                    await ws.send_text(message)
+                else:
+                    await ws.send_bytes(message)
+
+    async def send_personal_message(self, client_id: str, message: str | bytes):
+        self._logger.debug(
+            f"Selnding message={mask_sensitive(message if isinstance(message, str) else message.decode())} to {client_id=}"
+        )
         ws = self._actve_connections.get(client_id)
         if ws:
-            await ws.send_text(message)
+            if isinstance(message, str):
+                await ws.send_text(message)
+            else:
+                await ws.send_bytes(message)
 
     async def notify(
         self,
