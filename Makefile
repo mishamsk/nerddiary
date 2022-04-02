@@ -118,8 +118,6 @@ release-major: clean ## bump minmajoror version and package for distribution
 
 .PHONY: dist
 dist: clean ## builds source and wheel package
-	format
-	lint
 	poetry build
 	poetry export -f requirements.txt --without-hashes > requirements.txt
 	poetry publish
