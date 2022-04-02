@@ -143,12 +143,48 @@ class PollWorkflow:
             return question._type.get_answer_options(user=self._user)
 
     @property
+    def current_question_answer(self) -> str | None:
+        if self.current_question_code not in self._answers_raw:
+            return None
+
+        q_code = self.current_question_code
+        val = self._answers_raw[q_code]
+
+        question = self._poll._questions_dict[q_code]
+
+        if question.ephemeral:
+            return None
+
+        depends_on = question.depends_on
+
+        if depends_on:
+            dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
+            return question._type.get_answer_from_value(value=val, dep_value=dep_value, user=self._user)
+        else:
+            return question._type.get_answer_from_value(value=val, user=self._user)
+
+    @property
     def questions(self) -> List[Question]:
         return self._poll.questions
 
     @property
-    def answers(self) -> List[ValueLabel]:
-        return [val for q_code, val in self._answers_raw.items() if not self._poll._questions_dict[q_code].ephemeral]
+    def answers(self) -> Dict[str, str]:
+        ret = {}
+        for q_code, val in self._answers_raw.items():
+            question = self._poll._questions_dict[q_code]
+
+            if question.ephemeral:
+                continue
+
+            depends_on = question.depends_on
+
+            if depends_on:
+                dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
+                ret[question._type.get_answer_from_value(value=val, dep_value=dep_value, user=self._user)] = val.label
+            else:
+                ret[question._type.get_answer_from_value(value=val, user=self._user)] = val.label
+
+        return ret
 
     @property
     def current_delay_time(self) -> datetime.timedelta | None:
@@ -319,8 +355,9 @@ class PollWorkflow:
             current_question_allow_manual_answer=self.current_question._type.allows_manual,
             current_question_select_list=self.current_question_select_list,
             current_question_default_value=self.current_question.default_value,
+            current_question_answer=self.current_question_answer,
             questions=[q.display_name for q in self.questions if q.ephemeral is False],
-            answers=[a.label for a in self.answers],
+            answers=self.answers,
         )
 
     @classmethod

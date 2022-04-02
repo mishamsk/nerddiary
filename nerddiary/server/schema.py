@@ -102,5 +102,7 @@ class PollWorkflowStateSchema(PollWorkflowSchema):
     current_question_allow_manual_answer: bool
     current_question_select_list: List[ValueLabel[str]] | None
     current_question_default_value: str | None
+    current_question_answer: str | None
     questions: List[str]
-    answers: List[str]
+    answers: Dict[str, str]
+    """ Dict of {answer: label} pairs"""

@@ -78,6 +78,15 @@ class QuestionType(BaseModel, abc.ABC):
         if self.is_auto:
             raise NotImplementedError("This type doesn't support user input")
 
+    def get_answer_from_value(
+        self, value: ValueLabel, dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> str:
+        """Raises UnsupportedAnswerError() if string answer value is not supported"""
+        if self.is_auto:
+            raise NotImplementedError("This type doesn't support user input")
+
+        return self.serialize_value(value)
+
     def get_auto_value(self, dep_value: ValueLabel | None = None, user: User | None = None) -> ValueLabel | None:
         if not self.is_auto:
             raise NotImplementedError("This type doesn't auto generate a value")
@@ -323,6 +332,13 @@ class TimestampType(QuestionType):
             value=time,
             label="⏰ " + time.format("DD MMM, YYYY HH:mm", locale=user.lang_code if user else "en"),
         )
+
+    def get_answer_from_value(
+        self, value: ValueLabel[arrow.Arrow], dep_value: ValueLabel | None = None, user: User | None = None
+    ) -> str:
+        """Raises UnsupportedAnswerError() if string answer value is not supported"""
+
+        return value.value.format("YYYY-MM-DDTHH:mm:ss")
 
     @property
     def allows_manual(self) -> bool:
