@@ -12,7 +12,7 @@ from pydantic.json import pydantic_encoder
 from ..primitive.valuelabel import ValueLabel
 from .session.status import UserSessionStatus
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 def generate_notification(type: NotificationType, data: Schema | None = None) -> str:
@@ -104,5 +104,5 @@ class PollWorkflowStateSchema(PollWorkflowSchema):
     current_question_default_value: str | None
     current_question_answer: str | None
     questions: List[str]
-    answers: Dict[str, str]
-    """ Dict of {answer: label} pairs"""
+    answers: List[Tuple[str, str]]
+    """ List of tuples (answer, label)"""

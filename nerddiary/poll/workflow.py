@@ -168,8 +168,8 @@ class PollWorkflow:
         return self._poll.questions
 
     @property
-    def answers(self) -> Dict[str, str]:
-        ret = {}
+    def answers(self) -> List[Tuple[str, str]]:
+        ret = []
         for q_code, val in self._answers_raw.items():
             question = self._poll._questions_dict[q_code]
 
@@ -180,9 +180,11 @@ class PollWorkflow:
 
             if depends_on:
                 dep_value = self._answers_raw[self._poll._questions_dict[depends_on].code]
-                ret[question._type.get_answer_from_value(value=val, dep_value=dep_value, user=self._user)] = val.label
+                ret.append(
+                    (question._type.get_answer_from_value(value=val, dep_value=dep_value, user=self._user), val.label)
+                )
             else:
-                ret[question._type.get_answer_from_value(value=val, user=self._user)] = val.label
+                ret.append((question._type.get_answer_from_value(value=val, user=self._user), val.label))
 
         return ret
 
