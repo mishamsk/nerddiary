@@ -376,9 +376,14 @@ class PollWorkflow:
                     continue
 
                 if q_code not in row:
+                    # Means that poll questions have chaged since that record, so there is nothing to restore
                     continue
 
                 depends_on = question.depends_on
+
+                if depends_on and depends_on not in row:
+                    # Means that poll questions have chaged since that record and the dependant value doesn't exist in historical record, so we can't restore either
+                    continue
 
                 if depends_on:
                     dep_value = answers_raw[poll._questions_dict[depends_on].code]
