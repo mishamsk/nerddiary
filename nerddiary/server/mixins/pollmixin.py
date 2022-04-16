@@ -212,7 +212,7 @@ class PollMixin:
             return Error(err.code, err.message, err.data)
 
         try:
-            poll_workflow = await ses.get_poll_log(log_id=log_id)
+            poll_workflow = await ses.get_poll_workflow_from_log(log_id=log_id)
         except NerdDiaryError as err:
             self._logger.debug(f"Error: {err!r}")
             return Error(err.code, err.message, err.data)

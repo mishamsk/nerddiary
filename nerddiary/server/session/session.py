@@ -265,7 +265,7 @@ class UserSession:
         return new_workflow
 
     async def get_poll_data(
-        self, poll_name: str | None = None, count: int | None = None, skip: int | None = None
+        self, poll_name: str | None = None, count: int | None = None, skip: int | None = None, log_id: int | None = None
     ) -> PollLogsSchema:
         if self.user_status <= UserSessionStatus.LOCKED:
             raise NerdDiaryError(
@@ -274,7 +274,15 @@ class UserSession:
             )
 
         ret = PollLogsSchema(logs=[])
-        if poll_name or count or skip:
+        if log_id:
+            try:
+                logs = [self._data_connection.get_log(id=log_id)]
+            except ValueError:
+                raise NerdDiaryError(
+                    NerdDiaryErrorCode.LOGS_LOG_ID_NOT_FOUND,
+                    str(log_id),
+                )
+        elif poll_name or count or skip:
             logs = self._data_connection.get_poll_logs(poll_code=poll_name, max_rows=count, skip=skip)
         else:
             logs = self._data_connection.get_all_logs()
@@ -290,7 +298,7 @@ class UserSession:
 
         return ret
 
-    async def get_poll_log(self, log_id: int) -> PollWorkflow:
+    async def get_poll_workflow_from_log(self, log_id: int) -> PollWorkflow:
         if self.user_status <= UserSessionStatus.LOCKED:
             raise NerdDiaryError(
                 NerdDiaryErrorCode.SESSION_INCORRECT_STATUS,

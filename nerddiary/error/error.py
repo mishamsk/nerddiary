@@ -22,6 +22,8 @@ class NerdDiaryErrorCode(enum.IntEnum):
     SESSION_POLL_ALREADY_ACTIVE = -111
     # Workflow
     WORKFLOW_FAILED_DESERIALIZE = -201
+    # Logs
+    LOGS_LOG_ID_NOT_FOUND = -301
     # XML-RPC Error codes
     RPC_PARSE_ERROR = -32700
     RPC_INVALID_REQUEST = -32600
@@ -44,6 +46,7 @@ ND_ERROR_MESSAGES = {
     NerdDiaryErrorCode.SESSION_INCORRECT_PASSWORD_OR_KEY: "Incorrect password or key",
     NerdDiaryErrorCode.SESSION_INVALID_USER_CONFIGURATION: "User configuration file is not valid",
     NerdDiaryErrorCode.WORKFLOW_FAILED_DESERIALIZE: "Data corruption: Error parsing serialized workflow data",
+    NerdDiaryErrorCode.LOGS_LOG_ID_NOT_FOUND: "Log with id: <{}> wasn't found",
     NerdDiaryErrorCode.UNDEFINED: "Unspecified session error",
 }
 
