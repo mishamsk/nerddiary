@@ -5,7 +5,7 @@ from ....dependencies import nds
 websocket_router = r = APIRouter(prefix="/ws")
 
 
-@r.websocket("/ws/{client_id}")
+@r.websocket("/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await nds.on_connect_client(client_id, websocket)
     try:
